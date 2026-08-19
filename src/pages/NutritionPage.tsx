@@ -2,9 +2,11 @@ import { useCallback, useEffect, useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../auth/AuthContext';
-import { MEAL_GROUPS, MEAL_GROUP_META, DAY_LABELS } from '../lib/trainingTypes';
+import { useProfileDirectory } from '../hooks/useProfileDirectory';
+import { MEAL_GROUPS, MEAL_GROUP_META } from '../lib/trainingTypes';
+import { MealPlanEditorModal } from '../components/MealPlanEditorModal';
 import { todayISO } from '../lib/date';
-import type { MealEntry, MealGroup, MealPlanEntry } from '../types/database';
+import type { MealEntry, MealGroup, MealPlan } from '../types/database';
 
 const MACRO_TARGETS = [
   { key: 'protein_g' as const, label: 'Protein', target: 180, color: 'oklch(0.58 0.2 25)' },
@@ -38,34 +40,34 @@ function AddFoodForm({ onSubmit, onCancel }: { onSubmit: (v: { name: string; cal
 }
 
 export function NutritionPage() {
-  const { fighter } = useAuth();
+  const { fighter, profile } = useAuth();
+  const { directory } = useProfileDirectory();
   const [tab, setTab] = useState<'today' | 'plan'>('today');
   const [entries, setEntries] = useState<MealEntry[]>([]);
   const [openForm, setOpenForm] = useState<MealGroup | null>(null);
-  const [planEntries, setPlanEntries] = useState<Record<string, string>>({});
+  const [myPlans, setMyPlans] = useState<MealPlan[]>([]);
+  const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   const today = todayISO();
 
   const load = useCallback(async () => {
-    if (!fighter) return;
+    if (!fighter || !profile) return;
     setLoading(true);
     const { data } = await supabase.from('meal_entries').select('*').eq('fighter_id', fighter.profile_id).eq('entry_date', today);
     setEntries(data ?? []);
 
-    const { data: plan } = await supabase.from('meal_plan_entries').select('*').eq('fighter_id', fighter.profile_id);
-    const map: Record<string, string> = {};
-    for (const p of (plan ?? []) as MealPlanEntry[]) map[`${p.day_of_week}:${p.meal_group}`] = p.description;
-    setPlanEntries(map);
+    const { data: plans } = await supabase.from('meal_plans').select('*').eq('owner_id', profile.id).order('updated_at', { ascending: false });
+    setMyPlans((plans ?? []) as MealPlan[]);
 
     setLoading(false);
-  }, [fighter, today]);
+  }, [fighter, profile, today]);
 
   useEffect(() => {
     load();
   }, [load]);
 
-  if (!fighter) return <Navigate to="/dashboard" replace />;
+  if (!fighter || !profile) return <Navigate to="/dashboard" replace />;
   if (loading) return <div style={{ color: 'var(--muted-2)' }}>Loading…</div>;
 
   const addFood = async (group: MealGroup, v: { name: string; calories: number; protein_g: number; carbs_g: number; fat_g: number }) => {
@@ -74,12 +76,15 @@ export function NutritionPage() {
     await load();
   };
 
-  const savePlanCell = async (dayIndex: number, group: MealGroup, description: string) => {
-    await supabase.from('meal_plan_entries').upsert(
-      { fighter_id: fighter.profile_id, day_of_week: dayIndex, meal_group: group, description },
-      { onConflict: 'fighter_id,day_of_week,meal_group' },
-    );
+  const createPlan = async () => {
+    const { data } = await supabase.from('meal_plans').insert({ name: 'New Plan', owner_id: profile.id, created_by: profile.id }).select().single();
+    if (data) {
+      await load();
+      setSelectedPlanId(data.id);
+    }
   };
+
+  const selectedPlan = myPlans.find((p) => p.id === selectedPlanId) ?? null;
 
   const caloriesConsumed = entries.reduce((a, e) => a + e.calories, 0);
   const caloriesTarget = fighter.daily_calorie_target;
@@ -159,24 +164,29 @@ export function NutritionPage() {
         </div>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(220px,1fr))', gap: 16 }}>
-          {DAY_LABELS.map((label, dayIndex) => (
-            <div key={label} className="card" style={{ padding: 18 }}>
-              <div className="label" style={{ fontSize: 16, marginBottom: 12 }}>{label}</div>
-              {MEAL_GROUPS.map((group) => (
-                <div key={group} style={{ marginBottom: 8 }}>
-                  <strong style={{ color: 'oklch(0.9 0.004 40)', fontSize: 12 }}>{MEAL_GROUP_META[group].label}</strong>
-                  <textarea
-                    defaultValue={planEntries[`${dayIndex}:${group}`] ?? ''}
-                    onBlur={(e) => savePlanCell(dayIndex, group, e.target.value)}
-                    placeholder="—"
-                    className="input"
-                    style={{ fontSize: 12, minHeight: 40, resize: 'vertical', marginTop: 4 }}
-                  />
-                </div>
-              ))}
+          {myPlans.map((p) => (
+            <div key={p.id} onClick={() => setSelectedPlanId(p.id)} className="card" style={{ padding: 20, cursor: 'pointer' }}>
+              <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 6 }}>{p.name}</div>
+              <div style={{ fontSize: 12, color: 'var(--muted-3)' }}>Updated {p.updated_at.slice(0, 10)}</div>
             </div>
           ))}
+          <div
+            onClick={createPlan}
+            style={{ border: '1px dashed var(--border-light)', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 100, cursor: 'pointer', color: 'var(--muted-3)', fontFamily: "'Bebas Neue', sans-serif", fontSize: 16, letterSpacing: 1 }}
+          >
+            + NEW PLAN
+          </div>
         </div>
+      )}
+
+      {selectedPlan && (
+        <MealPlanEditorModal
+          plan={selectedPlan}
+          directory={directory}
+          canAssign={profile.role === 'coach'}
+          onClose={() => setSelectedPlanId(null)}
+          onSaved={load}
+        />
       )}
     </div>
   );

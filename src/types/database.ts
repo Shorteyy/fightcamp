@@ -69,9 +69,18 @@ export interface MealEntry {
   created_at: string;
 }
 
-export interface MealPlanEntry {
+export interface MealPlan {
   id: string;
-  fighter_id: string;
+  name: string;
+  owner_id: string;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface MealPlanItem {
+  id: string;
+  meal_plan_id: string;
   day_of_week: number;
   meal_group: MealGroup;
   description: string;
