@@ -42,7 +42,7 @@ export function AssignMealPlanModal({ plan, directory, onClose, onAssigned }: Pr
     for (const fighterId of selected) {
       const { data: newPlan } = await supabase
         .from('meal_plans')
-        .insert({ name: plan.name, owner_id: fighterId, created_by: profile.id })
+        .insert({ name: plan.name, owner_id: fighterId, created_by: profile.id, dietary_tags: plan.dietary_tags })
         .select()
         .single();
       if (!newPlan) continue;

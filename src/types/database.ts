@@ -79,6 +79,7 @@ export interface MealPlan {
   name: string;
   owner_id: string;
   created_by: string | null;
+  dietary_tags: string[];
   created_at: string;
   updated_at: string;
 }

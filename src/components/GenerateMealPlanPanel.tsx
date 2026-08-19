@@ -7,6 +7,7 @@ import type { Fighter, Goal, WeightEntry } from '../types/database';
 export interface GeneratedPlan {
   planName: string;
   dailyCalorieTarget: number;
+  dietaryRestrictionsUsed: string[];
   days: {
     dayOfWeek: number;
     mealGroup: string;
@@ -89,7 +90,7 @@ export function GenerateMealPlanPanel({ ownerId, onGenerated, onCancel }: Props)
       setError(data?.error ?? fnError?.message ?? 'Could not generate a plan.');
       return;
     }
-    onGenerated(data as GeneratedPlan);
+    onGenerated({ ...data, dietaryRestrictionsUsed: body.dietaryRestrictions as string[] } as GeneratedPlan);
   };
 
   if (loading) return <div className="card" style={{ padding: 16, marginBottom: 16, fontSize: 13, color: 'var(--muted-2)' }}>Loading…</div>;

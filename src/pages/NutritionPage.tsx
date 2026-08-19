@@ -7,7 +7,7 @@ import { usePagination } from '../hooks/usePagination';
 import { PaginationControls } from '../components/PaginationControls';
 import { MEAL_GROUPS, MEAL_GROUP_META } from '../lib/trainingTypes';
 import { MealPlanEditorModal } from '../components/MealPlanEditorModal';
-import { DIETARY_RESTRICTIONS } from '../lib/dietaryRestrictions';
+import { DIETARY_RESTRICTIONS, dietaryRestrictionLabel } from '../lib/dietaryRestrictions';
 import { todayISO } from '../lib/date';
 import type { MealEntry, MealGroup, MealPlan } from '../types/database';
 
@@ -80,6 +80,7 @@ export function NutritionPage() {
   const [allPlans, setAllPlans] = useState<MealPlan[]>([]);
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
   const [selectedHistoryDate, setSelectedHistoryDate] = useState<string | null>(null);
+  const [tagFilter, setTagFilter] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
 
   const today = todayISO();
@@ -107,8 +108,14 @@ export function NutritionPage() {
     load();
   }, [load]);
 
-  const myPlansPagination = usePagination(myPlans);
-  const allPlansPagination = usePagination(allPlans);
+  const matchesTagFilter = (p: MealPlan) => tagFilter.length === 0 || p.dietary_tags.some((t) => tagFilter.includes(t));
+  const toggleTagFilter = (value: string) => {
+    setTagFilter((f) => (f.includes(value) ? f.filter((v) => v !== value) : [...f, value]));
+  };
+  const filteredMyPlans = myPlans.filter(matchesTagFilter);
+  const filteredAllPlans = allPlans.filter(matchesTagFilter);
+  const myPlansPagination = usePagination(filteredMyPlans);
+  const allPlansPagination = usePagination(filteredAllPlans);
 
   const dailyTotals = Array.from(new Set(allEntries.map((e) => e.entry_date))).map((date) => {
     const dayEntries = allEntries.filter((e) => e.entry_date === date);
@@ -261,6 +268,7 @@ export function NutritionPage() {
         </div>
       ) : tab === 'plan' ? (
         <>
+          <PlanTagFilter tagFilter={tagFilter} onToggle={toggleTagFilter} />
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(220px,1fr))', gap: 16 }}>
             {myPlansPagination.pageItems.map((p) => (
               <div key={p.id} onClick={() => setSelectedPlanId(p.id)} className="card" style={{ padding: 20, cursor: 'pointer', position: 'relative' }}>
@@ -272,9 +280,11 @@ export function NutritionPage() {
                   ✕
                 </button>
                 <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 6 }}>{p.name}</div>
-                <div style={{ fontSize: 12, color: 'var(--muted-3)' }}>Updated {p.updated_at.slice(0, 10)}</div>
+                <div style={{ fontSize: 12, color: 'var(--muted-3)', marginBottom: 6 }}>Updated {p.updated_at.slice(0, 10)}</div>
+                <PlanTagBadges tags={p.dietary_tags} />
               </div>
             ))}
+            {filteredMyPlans.length === 0 && myPlans.length > 0 && <div style={{ color: 'var(--muted-3)', fontSize: 13 }}>No plans match the selected tags.</div>}
             <div
               onClick={createPlan}
               style={{ border: '1px dashed var(--border-light)', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 100, cursor: 'pointer', color: 'var(--muted-3)', fontFamily: "'Bebas Neue', sans-serif", fontSize: 16, letterSpacing: 1 }}
@@ -286,6 +296,7 @@ export function NutritionPage() {
         </>
       ) : tab === 'all' ? (
         <>
+          <PlanTagFilter tagFilter={tagFilter} onToggle={toggleTagFilter} />
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(220px,1fr))', gap: 16 }}>
             {allPlansPagination.pageItems.map((p) => {
               const canDelete = p.owner_id === profile.id || isCoach;
@@ -301,11 +312,13 @@ export function NutritionPage() {
                     </button>
                   )}
                   <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 6 }}>{p.name}</div>
-                  <div style={{ fontSize: 12, color: 'var(--muted-3)' }}>{directory[p.owner_id]?.name ?? '—'} · Updated {p.updated_at.slice(0, 10)}</div>
+                  <div style={{ fontSize: 12, color: 'var(--muted-3)', marginBottom: 6 }}>{directory[p.owner_id]?.name ?? '—'} · Updated {p.updated_at.slice(0, 10)}</div>
+                  <PlanTagBadges tags={p.dietary_tags} />
                 </div>
               );
             })}
             {allPlans.length === 0 && <div style={{ color: 'var(--muted-3)', fontSize: 13 }}>No plans yet.</div>}
+            {allPlans.length > 0 && filteredAllPlans.length === 0 && <div style={{ color: 'var(--muted-3)', fontSize: 13 }}>No plans match the selected tags.</div>}
           </div>
           <PaginationControls page={allPlansPagination.page} totalPages={allPlansPagination.totalPages} onChange={allPlansPagination.setPage} />
         </>
@@ -371,6 +384,37 @@ export function NutritionPage() {
           onSaved={load}
         />
       )}
+    </div>
+  );
+}
+
+function PlanTagFilter({ tagFilter, onToggle }: { tagFilter: string[]; onToggle: (value: string) => void }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
+      <span style={{ fontSize: 11, color: 'var(--muted-3)', letterSpacing: '0.5px' }}>FILTER BY TAG:</span>
+      {DIETARY_RESTRICTIONS.map((r) => {
+        const active = tagFilter.includes(r.value);
+        return (
+          <button
+            key={r.value}
+            onClick={() => onToggle(r.value)}
+            style={{ padding: '3px 9px', border: '1px solid var(--border-light)', background: active ? 'var(--accent)' : 'transparent', color: active ? 'oklch(0.98 0 0)' : 'var(--muted-2)', fontSize: 11, borderRadius: 3 }}
+          >
+            {r.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function PlanTagBadges({ tags }: { tags: string[] }) {
+  if (tags.length === 0) return null;
+  return (
+    <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+      {tags.map((t) => (
+        <span key={t} style={{ fontSize: 10, color: 'var(--muted-2)', border: '1px solid var(--border-light)', borderRadius: 3, padding: '1px 6px' }}>{dietaryRestrictionLabel(t)}</span>
+      ))}
     </div>
   );
 }

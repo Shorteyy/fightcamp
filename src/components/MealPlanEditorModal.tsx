@@ -4,6 +4,7 @@ import { useAuth } from '../auth/AuthContext';
 import { MEAL_GROUPS, MEAL_GROUP_META, DAY_LABELS } from '../lib/trainingTypes';
 import { AssignMealPlanModal } from './AssignMealPlanModal';
 import { GenerateMealPlanPanel, type GeneratedPlan } from './GenerateMealPlanPanel';
+import { DIETARY_RESTRICTIONS, dietaryRestrictionLabel } from '../lib/dietaryRestrictions';
 import type { DirectoryEntry } from '../hooks/useProfileDirectory';
 import type { MealPlan, MealPlanItem } from '../types/database';
 
@@ -32,8 +33,9 @@ export function MealPlanEditorModal({ plan, directory, canAssign, onClose, onSav
   const canEdit = isOwner || profile?.role === 'coach';
 
   const [name, setName] = useState(plan.name);
+  const [tags, setTags] = useState<string[]>(plan.dietary_tags);
   const [cells, setCells] = useState<Record<string, CellState>>({});
-  const [original, setOriginal] = useState<{ name: string; cells: Record<string, CellState> } | null>(null);
+  const [original, setOriginal] = useState<{ name: string; tags: string[]; cells: Record<string, CellState> } | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [assignOpen, setAssignOpen] = useState(false);
@@ -55,12 +57,20 @@ export function MealPlanEditorModal({ plan, directory, canAssign, onClose, onSav
         };
       }
       setCells(map);
-      setOriginal({ name: plan.name, cells: map });
+      setOriginal({ name: plan.name, tags: plan.dietary_tags, cells: map });
       setLoading(false);
     });
-  }, [plan.id, plan.name]);
+  }, [plan.id, plan.name, plan.dietary_tags]);
 
-  const dirty = original != null && (name !== original.name || JSON.stringify(cells) !== JSON.stringify(original.cells));
+  const dirty = original != null && (
+    name !== original.name ||
+    JSON.stringify([...tags].sort()) !== JSON.stringify([...original.tags].sort()) ||
+    JSON.stringify(cells) !== JSON.stringify(original.cells)
+  );
+
+  const toggleTag = (value: string) => {
+    setTags((t) => (t.includes(value) ? t.filter((v) => v !== value) : [...t, value]));
+  };
 
   const setDescription = (day: number, group: string, value: string) => {
     const key = `${day}:${group}`;
@@ -69,8 +79,8 @@ export function MealPlanEditorModal({ plan, directory, canAssign, onClose, onSav
 
   const save = async () => {
     setSaving(true);
-    if (name !== plan.name) {
-      await supabase.from('meal_plans').update({ name, updated_at: new Date().toISOString() }).eq('id', plan.id);
+    if (name !== plan.name || JSON.stringify([...tags].sort()) !== JSON.stringify([...plan.dietary_tags].sort())) {
+      await supabase.from('meal_plans').update({ name, dietary_tags: tags, updated_at: new Date().toISOString() }).eq('id', plan.id);
     }
     const rows = DAY_LABELS.flatMap((_, day) =>
       MEAL_GROUPS.map((group) => {
@@ -90,7 +100,7 @@ export function MealPlanEditorModal({ plan, directory, canAssign, onClose, onSav
     );
     await supabase.from('meal_plan_items').upsert(rows, { onConflict: 'meal_plan_id,day_of_week,meal_group' });
     setSaving(false);
-    setOriginal({ name, cells });
+    setOriginal({ name, tags, cells });
     onSaved();
   };
 
@@ -108,6 +118,7 @@ export function MealPlanEditorModal({ plan, directory, canAssign, onClose, onSav
     }
     setCells(next);
     setName(generated.planName);
+    setTags(generated.dietaryRestrictionsUsed ?? []);
     setGenerateOpen(false);
   };
 
@@ -152,6 +163,30 @@ export function MealPlanEditorModal({ plan, directory, canAssign, onClose, onSav
         </div>
         <div style={{ fontSize: 12, color: 'var(--muted-3)', marginBottom: 16 }}>
           Owned by {directory[plan.owner_id]?.name ?? '—'}{!canEdit ? ' · read-only' : ''}
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
+          <span style={{ fontSize: 11, color: 'var(--muted-3)', letterSpacing: '0.5px' }}>TAGS:</span>
+          {canEdit ? (
+            DIETARY_RESTRICTIONS.map((r) => {
+              const active = tags.includes(r.value);
+              return (
+                <button
+                  key={r.value}
+                  onClick={() => toggleTag(r.value)}
+                  style={{ padding: '3px 9px', border: '1px solid var(--border-light)', background: active ? 'var(--accent)' : 'transparent', color: active ? 'oklch(0.98 0 0)' : 'var(--muted-2)', fontSize: 11, borderRadius: 3 }}
+                >
+                  {r.label}
+                </button>
+              );
+            })
+          ) : tags.length > 0 ? (
+            tags.map((t) => (
+              <span key={t} style={{ padding: '3px 9px', border: '1px solid var(--border-light)', fontSize: 11, borderRadius: 3, color: 'var(--muted-2)' }}>{dietaryRestrictionLabel(t)}</span>
+            ))
+          ) : (
+            <span style={{ fontSize: 11, color: 'var(--muted-4)' }}>none</span>
+          )}
         </div>
 
         {canEdit && generateOpen && (
