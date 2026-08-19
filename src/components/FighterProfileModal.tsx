@@ -54,7 +54,7 @@ export function FighterProfileModal({ fighter, profile, isCoach, onClose, onChan
         const today = todayISO();
         const upcomingList: Training[] = [];
         for (const t of trainings) {
-          counts[t.type]++;
+          if (!t.cancelled_at) counts[t.type]++;
           if (t.training_date >= today) upcomingList.push(t);
         }
         upcomingList.sort((a, b) => (a.training_date + a.start_time).localeCompare(b.training_date + b.start_time));
@@ -160,8 +160,8 @@ export function FighterProfileModal({ fighter, profile, isCoach, onClose, onChan
         <div className="label" style={{ fontSize: 15, margin: '20px 0 10px 0' }}>UPCOMING TRAININGS</div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 20 }}>
           {upcoming.map((u) => (
-            <div key={u.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, padding: '8px 0', borderBottom: '1px solid var(--border)' }}>
-              <span>{u.title}</span>
+            <div key={u.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, padding: '8px 0', borderBottom: '1px solid var(--border)', opacity: u.cancelled_at ? 0.6 : 1 }}>
+              <span style={{ textDecoration: u.cancelled_at ? 'line-through' : 'none' }}>{u.title}{u.cancelled_at ? ' (cancelled)' : ''}</span>
               <span style={{ color: 'var(--muted-2)' }}>{dayFull(u.training_date)} · {u.start_time.slice(0, 5)}</span>
             </div>
           ))}

@@ -43,10 +43,10 @@ export function DashboardPage() {
 
     const { data: weekTrainings } = await supabase
       .from('trainings')
-      .select('id')
+      .select('id, cancelled_at')
       .gte('training_date', wStart)
       .lte('training_date', wEnd);
-    const weekIds = (weekTrainings ?? []).map((t) => t.id);
+    const weekIds = (weekTrainings ?? []).filter((t) => !t.cancelled_at).map((t) => t.id);
 
     const allTrainingIds = Array.from(new Set([...(todays ?? []).map((t) => t.id), ...weekIds]));
     if (allTrainingIds.length > 0) {
@@ -135,16 +135,19 @@ export function DashboardPage() {
       <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 36 }}>
         {todaysTrainings.map((t) => {
           const meta = TRAINING_TYPE_META[t.type];
+          const cancelled = t.cancelled_at != null;
           const ids = (attendees[t.id] ?? []).slice(0, 4);
           return (
             <div
               key={t.id}
               onClick={() => setSelectedTrainingId(t.id)}
               className="card"
-              style={{ borderLeft: `4px solid ${meta.color}`, width: 260, padding: 18, cursor: 'pointer' }}
+              style={{ borderLeft: `4px solid ${cancelled ? 'var(--muted-4)' : meta.color}`, width: 260, padding: 18, cursor: 'pointer', opacity: cancelled ? 0.6 : 1 }}
             >
-              <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1, color: meta.color, marginBottom: 8 }}>{meta.abbr}</div>
-              <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 6 }}>{t.title}</div>
+              <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1, color: cancelled ? 'var(--muted-3)' : meta.color, marginBottom: 8 }}>
+                {meta.abbr}{cancelled ? ' · CANCELLED' : ''}
+              </div>
+              <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 6, textDecoration: cancelled ? 'line-through' : 'none' }}>{t.title}</div>
               <div style={{ color: 'var(--muted-2)', fontSize: 13, marginBottom: 14 }}>{t.start_time.slice(0, 5)} · {t.location}</div>
               <div style={{ display: 'flex', gap: 4 }}>
                 {ids.map((id) => {
@@ -245,6 +248,7 @@ export function DashboardPage() {
           attendeeIds={attendees[selectedTraining.id] ?? []}
           directory={directory}
           currentFighterId={fighter?.profile_id ?? null}
+          isCoach={profile?.role === 'coach'}
           onClose={() => setSelectedTrainingId(null)}
           onChanged={load}
         />

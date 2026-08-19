@@ -18,7 +18,7 @@ import type { Gala, Training, TrainingType } from '../types/database';
 type ViewMode = 'week' | 'month' | 'year';
 
 export function CalendarPage() {
-  const { fighter } = useAuth();
+  const { fighter, profile } = useAuth();
   const { directory } = useProfileDirectory();
   const { galas, refresh: refreshGalas } = useGalaDirectory();
   const isMobile = useIsMobile();
@@ -188,6 +188,7 @@ export function CalendarPage() {
           attendeeIds={attendees[selectedTraining.id] ?? []}
           directory={directory}
           currentFighterId={fighter?.profile_id ?? null}
+          isCoach={profile?.role === 'coach'}
           onClose={() => setSelectedTrainingId(null)}
           onChanged={load}
         />
@@ -240,15 +241,18 @@ function WeekView({ days, today, trainings, galas, attendees, directory, onSelec
             ))}
             {dayTrainings.map((t) => {
               const meta = TRAINING_TYPE_META[t.type];
+              const cancelled = t.cancelled_at != null;
               const ids = (attendees[t.id] ?? []).slice(0, 2);
               return (
                 <div
                   key={t.id}
                   onClick={() => onSelectTraining(t.id)}
-                  style={{ background: 'var(--card)', borderLeft: `3px solid ${meta.color}`, padding: '8px 10px', marginBottom: 8, cursor: 'pointer' }}
+                  style={{ background: 'var(--card)', borderLeft: `3px solid ${cancelled ? 'var(--muted-4)' : meta.color}`, padding: '8px 10px', marginBottom: 8, cursor: 'pointer', opacity: cancelled ? 0.6 : 1 }}
                 >
-                  <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.5px', color: meta.color, marginBottom: 4 }}>{meta.abbr}</div>
-                  <div style={{ fontSize: 12, fontWeight: 600, lineHeight: 1.3, marginBottom: 4 }}>{t.title}</div>
+                  <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.5px', color: cancelled ? 'var(--muted-3)' : meta.color, marginBottom: 4 }}>
+                    {meta.abbr}{cancelled ? ' · CANCELLED' : ''}
+                  </div>
+                  <div style={{ fontSize: 12, fontWeight: 600, lineHeight: 1.3, marginBottom: 4, textDecoration: cancelled ? 'line-through' : 'none' }}>{t.title}</div>
                   <div style={{ fontSize: 11, color: 'var(--muted-3)', marginBottom: 6 }}>{t.start_time.slice(0, 5)}</div>
                   <div style={{ display: 'flex', gap: 3 }}>
                     {ids.map((id) => {
@@ -291,7 +295,8 @@ function MonthView({ anchor, today, trainings, galas, onSelectDay }: MonthViewPr
         const isToday = date === today;
         const dayTrainings = trainings.filter((t) => t.training_date === date);
         const dayGalas = galas.filter((g) => g.event_date === date);
-        const typesPresent = Array.from(new Set(dayTrainings.map((t) => t.type))).slice(0, 4);
+        const activeTypes = Array.from(new Set(dayTrainings.filter((t) => !t.cancelled_at).map((t) => t.type))).slice(0, 4);
+        const hasCancelled = dayTrainings.some((t) => t.cancelled_at != null);
         return (
           <div
             key={date}
@@ -312,10 +317,11 @@ function MonthView({ anchor, today, trainings, galas, onSelectDay }: MonthViewPr
             {dayGalas.length > 0 && (
               <div style={{ fontSize: 9, fontWeight: 700, color: GALA_COLOR, marginBottom: 3 }}>★ {dayGalas[0].name}</div>
             )}
-            <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
-              {typesPresent.map((type) => (
+            <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap', alignItems: 'center' }}>
+              {activeTypes.map((type) => (
                 <span key={type} style={{ width: 6, height: 6, borderRadius: '50%', background: TRAINING_TYPE_META[type as TrainingType].color, display: 'inline-block' }} />
               ))}
+              {hasCancelled && <span style={{ fontSize: 8, color: 'var(--muted-4)', textDecoration: 'line-through' }}>cancelled</span>}
             </div>
           </div>
         );

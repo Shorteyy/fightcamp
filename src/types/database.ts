@@ -48,6 +48,7 @@ export interface Training {
   notes: string;
   created_by: string;
   created_at: string;
+  cancelled_at: string | null;
 }
 
 export interface TrainingAttendee {
