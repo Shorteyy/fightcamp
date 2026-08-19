@@ -13,15 +13,15 @@ interface Props {
 
 export function AssignMealPlanModal({ plan, directory, onClose, onAssigned }: Props) {
   const { profile } = useAuth();
-  const [fighterIds, setFighterIds] = useState<string[]>([]);
+  const [memberIds, setMemberIds] = useState<string[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    supabase.from('profiles').select('id').eq('role', 'fighter').then(({ data }) => {
-      setFighterIds((data ?? []).map((p) => p.id));
+    supabase.from('profiles').select('id').neq('id', profile?.id ?? '').then(({ data }) => {
+      setMemberIds((data ?? []).map((p) => p.id));
     });
-  }, []);
+  }, [profile?.id]);
 
   const toggle = (id: string) => {
     setSelected((s) => {
@@ -66,10 +66,10 @@ export function AssignMealPlanModal({ plan, directory, onClose, onAssigned }: Pr
           <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: 'var(--muted-2)', fontSize: 20 }}>✕</button>
         </div>
         <p style={{ fontSize: 13, color: 'var(--muted-1)', marginBottom: 16 }}>
-          Each fighter gets their own editable copy — future edits to your plan won't affect theirs.
+          Each person gets their own editable copy — future edits to your plan won't affect theirs.
         </p>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 20, maxHeight: 260, overflowY: 'auto' }}>
-          {fighterIds.map((id) => {
+          {memberIds.map((id) => {
             const d = directory[id];
             if (!d) return null;
             const checked = selected.has(id);
@@ -81,10 +81,10 @@ export function AssignMealPlanModal({ plan, directory, onClose, onAssigned }: Pr
               </label>
             );
           })}
-          {fighterIds.length === 0 && <div style={{ fontSize: 12, color: 'var(--muted-4)' }}>No fighters yet.</div>}
+          {memberIds.length === 0 && <div style={{ fontSize: 12, color: 'var(--muted-4)' }}>No one else on the team yet.</div>}
         </div>
         <button className="btn-primary" style={{ width: '100%' }} onClick={send} disabled={submitting || selected.size === 0}>
-          {submitting ? 'SENDING…' : `SEND TO ${selected.size || ''} FIGHTER${selected.size === 1 ? '' : 'S'}`}
+          {submitting ? 'SENDING…' : `SEND TO ${selected.size || ''} PERSON${selected.size === 1 ? '' : 'S'}`.replace('PERSONS', 'PEOPLE')}
         </button>
       </div>
     </div>

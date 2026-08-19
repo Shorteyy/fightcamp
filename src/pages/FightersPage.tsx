@@ -38,12 +38,9 @@ export function FightersPage() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    // Every profile has a fighters row now (coaches included), but this roster is
-    // specifically "who trains" — so it excludes coach profiles.
-    const { data: fighterProfiles } = await supabase.from('profiles').select('id').eq('role', 'fighter');
-    const fighterProfileIds = new Set((fighterProfiles ?? []).map((p) => p.id));
+    // Every profile — coach or fighter — has a fighters row now, so this is the whole team.
     const { data: fRows } = await supabase.from('fighters').select('*');
-    const filtered = (fRows ?? []).filter((f) => fighterProfileIds.has(f.profile_id));
+    const filtered = (fRows ?? []) as Fighter[];
     setFighters(filtered);
     const ids = filtered.map((f) => f.profile_id);
     if (ids.length > 0) {
@@ -91,7 +88,7 @@ export function FightersPage() {
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 24, flexWrap: 'wrap', gap: 12 }}>
-        <h1 className="heading" style={{ fontSize: 44, margin: 0 }}>FIGHTERS</h1>
+        <h1 className="heading" style={{ fontSize: 44, margin: 0 }}>TEAM</h1>
         <div style={{ display: 'flex', gap: 2, background: 'var(--panel)', border: '1px solid var(--border)' }}>
           {TABS.map((t) => (
             <button
@@ -126,7 +123,12 @@ export function FightersPage() {
                       {d?.initials}
                     </div>
                     <div>
-                      <div style={{ fontWeight: 700, fontSize: 15 }}>{d?.name}</div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <div style={{ fontWeight: 700, fontSize: 15 }}>{d?.name}</div>
+                        {d?.role === 'coach' && (
+                          <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.5px', color: 'var(--accent)', border: '1px solid var(--accent)', borderRadius: 3, padding: '1px 5px' }}>COACH</span>
+                        )}
+                      </div>
                       <div style={{ fontSize: 11, color: status?.color ?? 'var(--muted-3)', letterSpacing: '0.5px' }}>
                         {status ? status.status.toUpperCase() : 'NO GOAL SET'}
                       </div>
@@ -147,7 +149,7 @@ export function FightersPage() {
                 onClick={() => setShareOpen(true)}
                 style={{ border: '1px dashed var(--border-light)', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 170, cursor: 'pointer', color: 'var(--muted-3)', fontFamily: "'Bebas Neue', sans-serif", fontSize: 16, letterSpacing: 1 }}
               >
-                + ADD FIGHTER
+                + INVITE MEMBER
               </div>
             )}
           </div>

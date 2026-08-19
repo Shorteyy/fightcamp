@@ -233,7 +233,7 @@ export function DashboardPage() {
           {profile?.role === 'coach' && (
             <div className="card" style={{ padding: '18px 22px', flex: 1 }}>
               <div className="heading" style={{ fontSize: 32 }}>{fighterCount}</div>
-              <div style={{ fontSize: 12, color: 'var(--muted-3)', letterSpacing: '0.5px' }}>FIGHTERS ON ROSTER</div>
+              <div style={{ fontSize: 12, color: 'var(--muted-3)', letterSpacing: '0.5px' }}>FIGHTERS COACHED</div>
             </div>
           )}
         </div>

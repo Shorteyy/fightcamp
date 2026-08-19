@@ -6,7 +6,7 @@ const NAV_ITEMS = [
   { to: '/dashboard', label: 'DASHBOARD' },
   { to: '/calendar', label: 'CALENDAR' },
   { to: '/galas', label: 'GALAS' },
-  { to: '/fighters', label: 'FIGHTERS' },
+  { to: '/fighters', label: 'TEAM' },
   { to: '/weight', label: 'WEIGHT & GOALS', fighterOnly: true },
   { to: '/nutrition', label: 'NUTRITION', fighterOnly: true },
 ];
