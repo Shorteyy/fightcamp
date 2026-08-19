@@ -39,6 +39,52 @@ export function buildWeightChart(
   return { linePath, goalPath, dots, markerX: sx(deadlineISO), goalY: sy(goalWeight) };
 }
 
+export interface MultiChartSeries {
+  id: string;
+  color: string;
+  history: ChartPoint[];
+}
+
+export interface MultiChartResult {
+  series: { id: string; color: string; linePath: string; dots: { x: number; y: number }[] }[];
+  xAxis: { x: number; label: string }[];
+}
+
+// Shared x/y domain across every included fighter, so lines are directly
+// comparable on one chart (absolute kg, not normalized to % progress).
+export function buildMultiWeightChart(allSeries: MultiChartSeries[], w: number, h: number): MultiChartResult {
+  const pl = 34, pr = 10, pt = 14, pb = 26;
+  const nonEmpty = allSeries.filter((s) => s.history.length > 0);
+  if (nonEmpty.length === 0) return { series: [], xAxis: [] };
+
+  const allDates = nonEmpty.flatMap((s) => s.history.map((p) => dateNum(p.date)));
+  const allWeights = nonEmpty.flatMap((s) => s.history.map((p) => p.weight));
+  const x0 = Math.min(...allDates);
+  const x1 = Math.max(...allDates);
+  let yMin = Math.min(...allWeights);
+  let yMax = Math.max(...allWeights);
+  const pad = (yMax - yMin) * 0.15 || 1;
+  yMin -= pad;
+  yMax += pad;
+
+  const sx = (d: string) => pl + ((dateNum(d) - x0) / ((x1 - x0) || 1)) * (w - pl - pr);
+  const sy = (wt: number) => h - pb - ((wt - yMin) / (yMax - yMin)) * (h - pt - pb);
+
+  const series = nonEmpty.map((s) => ({
+    id: s.id,
+    color: s.color,
+    linePath: s.history.map((p, i) => (i === 0 ? 'M' : 'L') + sx(p.date).toFixed(1) + ',' + sy(p.weight).toFixed(1)).join(' '),
+    dots: s.history.map((p) => ({ x: sx(p.date), y: sy(p.weight) })),
+  }));
+
+  const xAxis = [
+    { x: sx(new Date(x0).toISOString().slice(0, 10)), label: new Date(x0).toISOString().slice(0, 10) },
+    { x: sx(new Date(x1).toISOString().slice(0, 10)), label: new Date(x1).toISOString().slice(0, 10) },
+  ];
+
+  return { series, xAxis };
+}
+
 export function computeStatus(history: ChartPoint[], goalWeight: number, deadline: string, today: string) {
   const first = history[0];
   const last = history[history.length - 1];

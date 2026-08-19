@@ -6,7 +6,7 @@ const NAV_ITEMS = [
   { to: '/dashboard', label: 'DASHBOARD' },
   { to: '/calendar', label: 'CALENDAR' },
   { to: '/galas', label: 'GALAS' },
-  { to: '/fighters', label: 'FIGHTERS', coachOnly: true },
+  { to: '/fighters', label: 'FIGHTERS' },
   { to: '/weight', label: 'WEIGHT & GOALS', fighterOnly: true },
   { to: '/nutrition', label: 'NUTRITION', fighterOnly: true },
 ];
@@ -16,7 +16,6 @@ export function AppShell() {
   const isMobile = useIsMobile();
 
   const visibleItems = NAV_ITEMS.filter((item) => {
-    if (item.coachOnly && profile?.role !== 'coach') return false;
     if (item.fighterOnly && !fighter) return false;
     return true;
   });
