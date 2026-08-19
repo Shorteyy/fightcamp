@@ -31,6 +31,7 @@ export function CalendarPage() {
   const [selectedTrainingId, setSelectedTrainingId] = useState<string | null>(null);
   const [selectedGalaId, setSelectedGalaId] = useState<string | null>(null);
   const [planOpen, setPlanOpen] = useState(false);
+  const [filterProfileId, setFilterProfileId] = useState<string>('');
 
   const rangeStart = viewMode === 'week' ? weekStart(anchor) : viewMode === 'month' ? monthGridDates(anchor)[0] : yearStart(anchor);
   const rangeEnd = viewMode === 'week' ? weekDates(weekStart(anchor))[6] : viewMode === 'month' ? monthGridDates(anchor)[41] : yearEnd(anchor);
@@ -55,6 +56,10 @@ export function CalendarPage() {
 
   const selectedTraining = trainings.find((t) => t.id === selectedTrainingId) ?? null;
   const selectedGala = galas.find((g) => g.id === selectedGalaId) ?? null;
+
+  const filteredTrainings = filterProfileId
+    ? trainings.filter((t) => t.created_by === filterProfileId || (attendees[t.id] ?? []).includes(filterProfileId))
+    : trainings;
 
   const goPrev = () => {
     if (viewMode === 'week') setAnchor(addDays(anchor, -7));
@@ -102,6 +107,17 @@ export function CalendarPage() {
           <div style={{ color: 'var(--muted-2)', fontSize: 14, minWidth: 160, textAlign: 'center' }}>{headerLabel}</div>
           <button className="btn-secondary" onClick={goNext}>Next ›</button>
           <button className="btn-secondary" onClick={goToday}>Today</button>
+          <select
+            className="input"
+            style={{ width: 'auto', padding: '9px 10px', fontSize: 13 }}
+            value={filterProfileId}
+            onChange={(e) => setFilterProfileId(e.target.value)}
+          >
+            <option value="">All participants</option>
+            {Object.values(directory).sort((a, b) => a.name.localeCompare(b.name)).map((d) => (
+              <option key={d.id} value={d.id}>{d.name}</option>
+            ))}
+          </select>
         </div>
       </div>
 
@@ -123,7 +139,7 @@ export function CalendarPage() {
         <WeekView
           days={weekDates(rangeStart)}
           today={today}
-          trainings={trainings}
+          trainings={filteredTrainings}
           galas={galas}
           attendees={attendees}
           directory={directory}
@@ -135,7 +151,7 @@ export function CalendarPage() {
         <MonthView
           anchor={anchor}
           today={today}
-          trainings={trainings}
+          trainings={filteredTrainings}
           galas={galas}
           onSelectDay={jumpToWeek}
         />
@@ -144,7 +160,7 @@ export function CalendarPage() {
         <YearView
           anchor={anchor}
           today={today}
-          trainings={trainings}
+          trainings={filteredTrainings}
           galas={galas}
           onSelectMonth={jumpToMonth}
           onSelectDay={jumpToWeek}
