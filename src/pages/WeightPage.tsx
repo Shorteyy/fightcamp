@@ -195,11 +195,24 @@ export function WeightPage() {
       <div className="card" style={{ marginBottom: 24 }}>
         {chart ? (
           <svg width="100%" height="300" viewBox="0 0 760 300">
+            {chart.yTicks.map((t, i) => (
+              <g key={i}>
+                <line x1={38} y1={t.pos} x2={750} y2={t.pos} stroke="oklch(0.28 0.012 40)" strokeWidth="1" />
+                <text x={34} y={t.pos + 4} fontSize="11" fill="oklch(0.55 0.01 40)" textAnchor="end">{t.label}</text>
+              </g>
+            ))}
+            {chart.xTicks.map((t, i) => (
+              <text key={i} x={t.pos} y={296} fontSize="11" fill="oklch(0.55 0.01 40)" textAnchor="middle">{t.label}</text>
+            ))}
             <line x1={chart.markerX} y1="0" x2={chart.markerX} y2="270" stroke="oklch(0.5 0.01 40)" strokeWidth="1" strokeDasharray="3 3" />
             <text x={chart.markerX} y="288" fontSize="11" fill="oklch(0.6 0.01 40)" textAnchor="middle">Goal: {deadline}</text>
             <path d={chart.goalPath} stroke="oklch(0.5 0.01 40)" strokeWidth="1.5" strokeDasharray="5 5" fill="none" />
             <path d={chart.linePath} stroke="oklch(0.58 0.2 25)" strokeWidth="3" fill="none" />
-            {chart.dots.map((d, i) => <circle key={i} cx={d.x} cy={d.y} r="4" fill="oklch(0.58 0.2 25)" />)}
+            {chart.dots.map((d, i) => (
+              <circle key={i} cx={d.x} cy={d.y} r="4" fill="oklch(0.58 0.2 25)">
+                <title>{d.date}: {d.weight} kg</title>
+              </circle>
+            ))}
             <circle cx={chart.markerX} cy={chart.goalY} r="5" fill="none" stroke="oklch(0.5 0.01 40)" strokeWidth="2" />
           </svg>
         ) : (

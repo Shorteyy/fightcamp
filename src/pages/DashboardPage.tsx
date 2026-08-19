@@ -197,9 +197,19 @@ export function DashboardPage() {
             {hasGoal && chart ? (
               <>
                 <svg width="100%" height="140" viewBox="0 0 400 140">
+                  {chart.yTicks.map((t, i) => (
+                    <g key={i}>
+                      <line x1={38} y1={t.pos} x2={390} y2={t.pos} stroke="oklch(0.28 0.012 40)" strokeWidth="1" />
+                      <text x={34} y={t.pos + 3} fontSize="9" fill="oklch(0.55 0.01 40)" textAnchor="end">{t.label}</text>
+                    </g>
+                  ))}
                   <path d={chart.goalPath} stroke="oklch(0.5 0.01 40)" strokeWidth="1.5" strokeDasharray="4 4" fill="none" />
                   <path d={chart.linePath} stroke="oklch(0.58 0.2 25)" strokeWidth="2.5" fill="none" />
-                  {chart.dots.map((d, i) => <circle key={i} cx={d.x} cy={d.y} r="3" fill="oklch(0.58 0.2 25)" />)}
+                  {chart.dots.map((d, i) => (
+                    <circle key={i} cx={d.x} cy={d.y} r="3" fill="oklch(0.58 0.2 25)">
+                      <title>{dayFull(d.date)}: {d.weight} kg</title>
+                    </circle>
+                  ))}
                 </svg>
                 <div style={{ display: 'flex', gap: 24, marginTop: 8, fontSize: 13, color: 'var(--muted-2)' }}>
                   <div>Current: <strong style={{ color: 'var(--text)' }}>{status!.current} kg</strong></div>

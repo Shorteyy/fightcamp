@@ -8,9 +8,9 @@ import { usePagination } from '../hooks/usePagination';
 import { PaginationControls } from '../components/PaginationControls';
 import { ShareFighterModal } from '../components/ShareFighterModal';
 import { FighterProfileModal } from '../components/FighterProfileModal';
-import { computeStatus, buildMultiWeightChart } from '../lib/chart';
+import { computeStatus, buildMultiWeightChart, filterHistoryByRange, type DateRange } from '../lib/chart';
 import { effectiveDeadline } from '../lib/goals';
-import { todayISO } from '../lib/date';
+import { todayISO, dayFull } from '../lib/date';
 import type { Fighter, WeightEntry } from '../types/database';
 
 type Tab = 'overview' | 'weights' | 'graph';
@@ -32,6 +32,7 @@ export function FightersPage() {
   const [shareOpen, setShareOpen] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [toggledOff, setToggledOff] = useState<Set<string>>(new Set());
+  const [dateRange, setDateRange] = useState<DateRange>('all');
   const [loading, setLoading] = useState(true);
 
   const isCoach = profile?.role === 'coach';
@@ -69,11 +70,17 @@ export function FightersPage() {
 
   const graphSeries = fighters
     .filter((f) => (weightByFighter[f.profile_id]?.length ?? 0) > 0 && !toggledOff.has(f.profile_id))
-    .map((f) => ({
-      id: f.profile_id,
-      color: directory[f.profile_id]?.hueColor ?? 'oklch(0.6 0.1 0)',
-      history: (weightByFighter[f.profile_id] ?? []).map((e) => ({ date: e.entry_date, weight: e.weight_kg })),
-    }));
+    .map((f) => {
+      const fullHistory = (weightByFighter[f.profile_id] ?? []).map((e) => ({ date: e.entry_date, weight: e.weight_kg }));
+      const goal = goalsByFighter[f.profile_id] ?? null;
+      const goalDeadline = goal ? effectiveDeadline(goal, galasById) : null;
+      return {
+        id: f.profile_id,
+        color: directory[f.profile_id]?.hueColor ?? 'oklch(0.6 0.1 0)',
+        history: filterHistoryByRange(fullHistory, dateRange, today),
+        goal: goal && goalDeadline ? { targetWeight: goal.target_weight_kg, deadlineISO: goalDeadline } : null,
+      };
+    });
   const chart = buildMultiWeightChart(graphSeries, 800, 360);
 
   const toggleFighter = (id: string) => {
@@ -178,29 +185,62 @@ export function FightersPage() {
 
       {tab === 'graph' && (
         <div className="card" style={{ padding: 22 }}>
-          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 16 }}>
-            {fighters.map((f) => {
-              const d = directory[f.profile_id];
-              const on = !toggledOff.has(f.profile_id);
-              const hasHistory = (weightByFighter[f.profile_id]?.length ?? 0) > 0;
-              if (!hasHistory) return null;
-              return (
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12, marginBottom: 16 }}>
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+              {fighters.map((f) => {
+                const d = directory[f.profile_id];
+                const on = !toggledOff.has(f.profile_id);
+                const hasHistory = (weightByFighter[f.profile_id]?.length ?? 0) > 0;
+                if (!hasHistory) return null;
+                return (
+                  <button
+                    key={f.profile_id}
+                    onClick={() => toggleFighter(f.profile_id)}
+                    style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 10px', border: `1px solid ${d?.hueColor}`, background: on ? d?.hueColor : 'transparent', color: on ? 'oklch(0.15 0.006 40)' : d?.hueColor, fontSize: 12, fontWeight: 700 }}
+                  >
+                    {d?.name}
+                  </button>
+                );
+              })}
+            </div>
+            <div style={{ display: 'flex', gap: 2, background: 'var(--panel)', border: '1px solid var(--border)' }}>
+              {([['1m', '1M'], ['3m', '3M'], ['all', 'ALL TIME']] as [DateRange, string][]).map(([id, label]) => (
                 <button
-                  key={f.profile_id}
-                  onClick={() => toggleFighter(f.profile_id)}
-                  style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 10px', border: `1px solid ${d?.hueColor}`, background: on ? d?.hueColor : 'transparent', color: on ? 'oklch(0.15 0.006 40)' : d?.hueColor, fontSize: 12, fontWeight: 700 }}
+                  key={id}
+                  onClick={() => setDateRange(id)}
+                  style={{ padding: '6px 12px', border: 'none', fontFamily: "'Bebas Neue', sans-serif", letterSpacing: 1, fontSize: 11, background: dateRange === id ? 'var(--accent)' : 'transparent', color: dateRange === id ? 'oklch(0.98 0 0)' : 'oklch(0.65 0.01 40)' }}
                 >
-                  {d?.name}
+                  {label}
                 </button>
-              );
-            })}
+              ))}
+            </div>
           </div>
           {chart.series.length > 0 ? (
             <svg width="100%" height="360" viewBox="0 0 800 360">
+              {chart.yTicks.map((t, i) => (
+                <g key={i}>
+                  <line x1={40} y1={t.pos} x2={800 - 14} y2={t.pos} stroke="oklch(0.28 0.012 40)" strokeWidth="1" />
+                  <text x={34} y={t.pos + 4} fontSize="10" fill="oklch(0.55 0.01 40)" textAnchor="end">{t.label}</text>
+                </g>
+              ))}
+              {chart.xTicks.map((t, i) => (
+                <text key={i} x={t.pos} y={352} fontSize="10" fill="oklch(0.55 0.01 40)" textAnchor="middle">{t.label}</text>
+              ))}
               {chart.series.map((s) => (
                 <g key={s.id}>
                   <path d={s.linePath} stroke={s.color} strokeWidth="2.5" fill="none" />
-                  {s.dots.map((d, i) => <circle key={i} cx={d.x} cy={d.y} r="3" fill={s.color} />)}
+                  {s.dots.map((d, i) => (
+                    <circle key={i} cx={d.x} cy={d.y} r="3.5" fill={s.color}>
+                      <title>{directory[s.id]?.name} — {dayFull(d.date)}: {d.weight} kg</title>
+                    </circle>
+                  ))}
+                  {s.goalMarker && (
+                    <g>
+                      <circle cx={s.goalMarker.x} cy={s.goalMarker.y} r="6" fill="none" stroke={s.color} strokeWidth="2" strokeDasharray="3 2">
+                        <title>{directory[s.id]?.name} — {s.goalMarker.label}</title>
+                      </circle>
+                    </g>
+                  )}
                 </g>
               ))}
             </svg>
