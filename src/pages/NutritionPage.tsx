@@ -3,6 +3,8 @@ import { Navigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../auth/AuthContext';
 import { useProfileDirectory } from '../hooks/useProfileDirectory';
+import { usePagination } from '../hooks/usePagination';
+import { PaginationControls } from '../components/PaginationControls';
 import { MEAL_GROUPS, MEAL_GROUP_META } from '../lib/trainingTypes';
 import { MealPlanEditorModal } from '../components/MealPlanEditorModal';
 import { todayISO } from '../lib/date';
@@ -42,14 +44,16 @@ function AddFoodForm({ onSubmit, onCancel }: { onSubmit: (v: { name: string; cal
 export function NutritionPage() {
   const { fighter, profile } = useAuth();
   const { directory } = useProfileDirectory();
-  const [tab, setTab] = useState<'today' | 'plan'>('today');
+  const [tab, setTab] = useState<'today' | 'plan' | 'all'>('today');
   const [entries, setEntries] = useState<MealEntry[]>([]);
   const [openForm, setOpenForm] = useState<MealGroup | null>(null);
   const [myPlans, setMyPlans] = useState<MealPlan[]>([]);
+  const [allPlans, setAllPlans] = useState<MealPlan[]>([]);
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   const today = todayISO();
+  const isCoach = profile?.role === 'coach';
 
   const load = useCallback(async () => {
     if (!fighter || !profile) return;
@@ -60,12 +64,18 @@ export function NutritionPage() {
     const { data: plans } = await supabase.from('meal_plans').select('*').eq('owner_id', profile.id).order('updated_at', { ascending: false });
     setMyPlans((plans ?? []) as MealPlan[]);
 
+    const { data: all } = await supabase.from('meal_plans').select('*').order('updated_at', { ascending: false });
+    setAllPlans((all ?? []) as MealPlan[]);
+
     setLoading(false);
   }, [fighter, profile, today]);
 
   useEffect(() => {
     load();
   }, [load]);
+
+  const myPlansPagination = usePagination(myPlans);
+  const allPlansPagination = usePagination(allPlans);
 
   if (!fighter || !profile) return <Navigate to="/dashboard" replace />;
   if (loading) return <div style={{ color: 'var(--muted-2)' }}>Loading…</div>;
@@ -84,7 +94,13 @@ export function NutritionPage() {
     }
   };
 
-  const selectedPlan = myPlans.find((p) => p.id === selectedPlanId) ?? null;
+  const deletePlan = async (id: string) => {
+    if (!confirm('Delete this meal plan?')) return;
+    await supabase.from('meal_plans').delete().eq('id', id);
+    await load();
+  };
+
+  const selectedPlan = myPlans.find((p) => p.id === selectedPlanId) ?? allPlans.find((p) => p.id === selectedPlanId) ?? null;
 
   const caloriesConsumed = entries.reduce((a, e) => a + e.calories, 0);
   const caloriesTarget = fighter.daily_calorie_target;
@@ -108,7 +124,13 @@ export function NutritionPage() {
             onClick={() => setTab('plan')}
             style={{ padding: '10px 18px', border: 'none', fontFamily: "'Bebas Neue', sans-serif", letterSpacing: 1, fontSize: 13, background: tab === 'plan' ? 'var(--accent)' : 'transparent', color: tab === 'plan' ? 'oklch(0.98 0 0)' : 'oklch(0.65 0.01 40)' }}
           >
-            MEAL PLAN
+            MY PLANS
+          </button>
+          <button
+            onClick={() => setTab('all')}
+            style={{ padding: '10px 18px', border: 'none', fontFamily: "'Bebas Neue', sans-serif", letterSpacing: 1, fontSize: 13, background: tab === 'all' ? 'var(--accent)' : 'transparent', color: tab === 'all' ? 'oklch(0.98 0 0)' : 'oklch(0.65 0.01 40)' }}
+          >
+            ALL PLANS
           </button>
         </div>
       </div>
@@ -162,21 +184,56 @@ export function NutritionPage() {
             );
           })}
         </div>
-      ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(220px,1fr))', gap: 16 }}>
-          {myPlans.map((p) => (
-            <div key={p.id} onClick={() => setSelectedPlanId(p.id)} className="card" style={{ padding: 20, cursor: 'pointer' }}>
-              <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 6 }}>{p.name}</div>
-              <div style={{ fontSize: 12, color: 'var(--muted-3)' }}>Updated {p.updated_at.slice(0, 10)}</div>
+      ) : tab === 'plan' ? (
+        <>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(220px,1fr))', gap: 16 }}>
+            {myPlansPagination.pageItems.map((p) => (
+              <div key={p.id} onClick={() => setSelectedPlanId(p.id)} className="card" style={{ padding: 20, cursor: 'pointer', position: 'relative' }}>
+                <button
+                  onClick={(e) => { e.stopPropagation(); deletePlan(p.id); }}
+                  style={{ position: 'absolute', top: 10, right: 10, background: 'transparent', border: 'none', color: 'var(--muted-3)', fontSize: 14 }}
+                  title="Delete plan"
+                >
+                  ✕
+                </button>
+                <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 6 }}>{p.name}</div>
+                <div style={{ fontSize: 12, color: 'var(--muted-3)' }}>Updated {p.updated_at.slice(0, 10)}</div>
+              </div>
+            ))}
+            <div
+              onClick={createPlan}
+              style={{ border: '1px dashed var(--border-light)', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 100, cursor: 'pointer', color: 'var(--muted-3)', fontFamily: "'Bebas Neue', sans-serif", fontSize: 16, letterSpacing: 1 }}
+            >
+              + NEW PLAN
             </div>
-          ))}
-          <div
-            onClick={createPlan}
-            style={{ border: '1px dashed var(--border-light)', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 100, cursor: 'pointer', color: 'var(--muted-3)', fontFamily: "'Bebas Neue', sans-serif", fontSize: 16, letterSpacing: 1 }}
-          >
-            + NEW PLAN
           </div>
-        </div>
+          <PaginationControls page={myPlansPagination.page} totalPages={myPlansPagination.totalPages} onChange={myPlansPagination.setPage} />
+        </>
+      ) : (
+        <>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(220px,1fr))', gap: 16 }}>
+            {allPlansPagination.pageItems.map((p) => {
+              const canDelete = p.owner_id === profile.id || isCoach;
+              return (
+                <div key={p.id} onClick={() => setSelectedPlanId(p.id)} className="card" style={{ padding: 20, cursor: 'pointer', position: 'relative' }}>
+                  {canDelete && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); deletePlan(p.id); }}
+                      style={{ position: 'absolute', top: 10, right: 10, background: 'transparent', border: 'none', color: 'var(--muted-3)', fontSize: 14 }}
+                      title="Delete plan"
+                    >
+                      ✕
+                    </button>
+                  )}
+                  <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 6 }}>{p.name}</div>
+                  <div style={{ fontSize: 12, color: 'var(--muted-3)' }}>{directory[p.owner_id]?.name ?? '—'} · Updated {p.updated_at.slice(0, 10)}</div>
+                </div>
+              );
+            })}
+            {allPlans.length === 0 && <div style={{ color: 'var(--muted-3)', fontSize: 13 }}>No plans yet.</div>}
+          </div>
+          <PaginationControls page={allPlansPagination.page} totalPages={allPlansPagination.totalPages} onChange={allPlansPagination.setPage} />
+        </>
       )}
 
       {selectedPlan && (
