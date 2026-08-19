@@ -23,7 +23,7 @@ const TABS: { id: Tab; label: string }[] = [
 
 export function FightersPage() {
   const { profile } = useAuth();
-  const { directory } = useProfileDirectory();
+  const { directory, refresh: refreshDirectory } = useProfileDirectory();
   const { galasById, loading: galasLoading } = useGalaDirectory();
   const { goalsByFighter, loading: goalsLoading, refresh: refreshGoals } = useActiveGoals();
   const [tab, setTab] = useState<Tab>('overview');
@@ -220,6 +220,7 @@ export function FightersPage() {
           onChanged={() => {
             load();
             refreshGoals();
+            refreshDirectory();
           }}
         />
       )}

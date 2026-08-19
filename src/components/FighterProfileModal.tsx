@@ -28,6 +28,8 @@ export function FighterProfileModal({ fighter, profile, isCoach, onClose, onChan
   const [goalWeight, setGoalWeight] = useState('');
   const [goalDeadline, setGoalDeadline] = useState('');
   const [saving, setSaving] = useState(false);
+  const [roleBusy, setRoleBusy] = useState(false);
+  const [roleError, setRoleError] = useState<string | null>(null);
 
   useEffect(() => {
     supabase.from('weight_entries').select('*').eq('fighter_id', fighter.profile_id).order('entry_date').then(({ data }) => setHistory(data ?? []));
@@ -75,6 +77,19 @@ export function FighterProfileModal({ fighter, profile, isCoach, onClose, onChan
     onChanged();
   };
 
+  const toggleRole = async () => {
+    setRoleBusy(true);
+    setRoleError(null);
+    const nextRole = profile.role === 'coach' ? 'fighter' : 'coach';
+    const { error } = await supabase.from('profiles').update({ role: nextRole }).eq('id', fighter.profile_id);
+    setRoleBusy(false);
+    if (error) {
+      setRoleError(error.message.includes('last coach') ? 'Cannot demote the last coach — promote someone else first.' : error.message);
+      return;
+    }
+    onChanged();
+  };
+
   const deadline = activeGoal ? effectiveDeadline(activeGoal, galasById) : null;
   const gala = activeGoal ? linkedGala(activeGoal, galasById) : null;
   const hasGoal = activeGoal != null && deadline != null;
@@ -86,13 +101,26 @@ export function FighterProfileModal({ fighter, profile, isCoach, onClose, onChan
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal-panel" style={{ width: 560 }} onClick={(e) => e.stopPropagation()}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
             <div style={{ width: 48, height: 48, borderRadius: '50%', background: profile.hueColor, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700 }}>{profile.initials}</div>
-            <div className="heading" style={{ fontSize: 26 }}>{profile.name}</div>
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div className="heading" style={{ fontSize: 26 }}>{profile.name}</div>
+                {profile.role === 'coach' && (
+                  <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.5px', color: 'var(--accent)', border: '1px solid var(--accent)', borderRadius: 3, padding: '1px 6px' }}>COACH</span>
+                )}
+              </div>
+              {isCoach && (
+                <button className="btn-secondary" style={{ padding: '3px 8px', fontSize: 10, marginTop: 4 }} onClick={toggleRole} disabled={roleBusy}>
+                  {roleBusy ? '…' : profile.role === 'coach' ? 'Demote to fighter' : 'Promote to coach'}
+                </button>
+              )}
+            </div>
           </div>
           <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: 'var(--muted-2)', fontSize: 20 }}>✕</button>
         </div>
+        {roleError && <div className="error-text" style={{ marginBottom: 16 }}>{roleError}</div>}
 
         {editing ? (
           <div style={{ display: 'flex', gap: 10, marginBottom: 16, alignItems: 'flex-end', flexWrap: 'wrap' }}>
