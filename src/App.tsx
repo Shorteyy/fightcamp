@@ -8,6 +8,7 @@ import { CalendarPage } from './pages/CalendarPage';
 import { FightersPage } from './pages/FightersPage';
 import { WeightPage } from './pages/WeightPage';
 import { NutritionPage } from './pages/NutritionPage';
+import { GalasPage } from './pages/GalasPage';
 
 function App() {
   return (
@@ -23,6 +24,7 @@ function App() {
       >
         <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/calendar" element={<CalendarPage />} />
+        <Route path="/galas" element={<GalasPage />} />
         <Route path="/fighters" element={<FightersPage />} />
         <Route path="/weight" element={<WeightPage />} />
         <Route path="/nutrition" element={<NutritionPage />} />

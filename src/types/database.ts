@@ -1,6 +1,7 @@
 export type UserRole = 'coach' | 'fighter';
 export type TrainingType = 'kickboxing' | 'running' | 'swimming' | 'strength' | 'recovery';
 export type MealGroup = 'breakfast' | 'lunch' | 'dinner' | 'snack';
+export type GalaParticipationType = 'attending' | 'attending_vip' | 'fighting' | 'cornering';
 
 export interface Profile {
   id: string;
@@ -15,6 +16,7 @@ export interface Fighter {
   goal_weight_kg: number | null;
   goal_deadline: string | null;
   daily_calorie_target: number;
+  goal_gala_id: string | null;
   created_at: string;
 }
 
@@ -63,5 +65,23 @@ export interface MealPlanEntry {
   day_of_week: number;
   meal_group: MealGroup;
   description: string;
+}
+
+export interface Gala {
+  id: string;
+  name: string;
+  event_date: string;
+  location: string;
+  notes: string;
+  poster_url: string | null;
+  created_by: string;
+  created_at: string;
+}
+
+export interface GalaParticipant {
+  gala_id: string;
+  profile_id: string;
+  participation_type: GalaParticipationType;
+  created_at: string;
 }
 

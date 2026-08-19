@@ -3,6 +3,8 @@ import { supabase } from '../lib/supabase';
 import { TRAINING_TYPE_META, TRAINING_TYPES } from '../lib/trainingTypes';
 import { dayFull, todayISO } from '../lib/date';
 import { buildWeightChart } from '../lib/chart';
+import { effectiveDeadline, linkedGala } from '../lib/goals';
+import { useGalaDirectory } from '../hooks/useGalaDirectory';
 import type { DirectoryEntry } from '../hooks/useProfileDirectory';
 import type { Fighter, Training, TrainingType, WeightEntry } from '../types/database';
 
@@ -15,6 +17,7 @@ interface Props {
 }
 
 export function FighterProfileModal({ fighter, profile, isCoach, onClose, onChanged }: Props) {
+  const { galasById } = useGalaDirectory();
   const [history, setHistory] = useState<WeightEntry[]>([]);
   const [upcoming, setUpcoming] = useState<Training[]>([]);
   const [typeCounts, setTypeCounts] = useState<Record<TrainingType, number>>({ kickboxing: 0, running: 0, swimming: 0, strength: 0, recovery: 0 });
@@ -50,18 +53,21 @@ export function FighterProfileModal({ fighter, profile, isCoach, onClose, onChan
 
   const saveGoal = async () => {
     setSaving(true);
+    // A manually-entered deadline always overrides/clears any gala link (same rule as the Weight page).
     await supabase
       .from('fighters')
-      .update({ goal_weight_kg: goalWeight ? parseFloat(goalWeight) : null, goal_deadline: goalDeadline || null })
+      .update({ goal_weight_kg: goalWeight ? parseFloat(goalWeight) : null, goal_deadline: goalDeadline || null, goal_gala_id: null })
       .eq('profile_id', fighter.profile_id);
     setSaving(false);
     setEditing(false);
     onChanged();
   };
 
-  const hasGoal = fighter.goal_weight_kg != null && fighter.goal_deadline;
+  const deadline = effectiveDeadline(fighter, galasById);
+  const gala = linkedGala(fighter, galasById);
+  const hasGoal = fighter.goal_weight_kg != null && deadline != null;
   const chart = hasGoal && history.length > 0
-    ? buildWeightChart(history.map((h) => ({ date: h.entry_date, weight: h.weight_kg })), fighter.goal_weight_kg!, fighter.goal_deadline!, 480, 180)
+    ? buildWeightChart(history.map((h) => ({ date: h.entry_date, weight: h.weight_kg })), fighter.goal_weight_kg!, deadline!, 480, 180)
     : null;
   const maxCount = Math.max(1, ...Object.values(typeCounts));
 
@@ -93,7 +99,7 @@ export function FighterProfileModal({ fighter, profile, isCoach, onClose, onChan
           <div style={{ display: 'flex', gap: 24, fontSize: 13, color: 'var(--muted-2)', marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
             <div>Current: <strong style={{ color: 'var(--text)' }}>{history[history.length - 1]?.weight_kg ?? '—'} kg</strong></div>
             <div>Goal: <strong style={{ color: 'var(--text)' }}>{fighter.goal_weight_kg ?? 'not set'} kg</strong></div>
-            <div>Deadline: {fighter.goal_deadline ?? 'not set'}</div>
+            <div>Deadline: {deadline ?? 'not set'}{gala ? ` (${gala.name})` : ''}</div>
             {isCoach && (
               <button className="btn-secondary" style={{ padding: '4px 10px', fontSize: 11 }} onClick={() => setEditing(true)}>Edit goal</button>
             )}

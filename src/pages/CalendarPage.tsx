@@ -2,9 +2,12 @@ import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../auth/AuthContext';
 import { useProfileDirectory } from '../hooks/useProfileDirectory';
+import { useGalaDirectory } from '../hooks/useGalaDirectory';
 import { TrainingDetailModal } from '../components/TrainingDetailModal';
 import { PlanTrainingModal } from '../components/PlanTrainingModal';
+import { GalaDetailModal } from '../components/GalaDetailModal';
 import { TRAINING_TYPE_META, TRAINING_TYPES } from '../lib/trainingTypes';
+import { GALA_COLOR } from '../lib/galas';
 import { useIsMobile } from '../hooks/useIsMobile';
 import { todayISO, weekStart, weekDates, addDays, dayLabel, dayFull } from '../lib/date';
 import type { Training } from '../types/database';
@@ -12,6 +15,7 @@ import type { Training } from '../types/database';
 export function CalendarPage() {
   const { fighter } = useAuth();
   const { directory } = useProfileDirectory();
+  const { galas, refresh: refreshGalas } = useGalaDirectory();
   const isMobile = useIsMobile();
 
   const today = todayISO();
@@ -19,6 +23,7 @@ export function CalendarPage() {
   const [trainings, setTrainings] = useState<Training[]>([]);
   const [attendees, setAttendees] = useState<Record<string, string[]>>({});
   const [selectedTrainingId, setSelectedTrainingId] = useState<string | null>(null);
+  const [selectedGalaId, setSelectedGalaId] = useState<string | null>(null);
   const [planOpen, setPlanOpen] = useState(false);
 
   const days = weekDates(start);
@@ -43,6 +48,7 @@ export function CalendarPage() {
   }, [load]);
 
   const selectedTraining = trainings.find((t) => t.id === selectedTrainingId) ?? null;
+  const selectedGala = galas.find((g) => g.id === selectedGalaId) ?? null;
 
   return (
     <div>
@@ -71,12 +77,23 @@ export function CalendarPage() {
         {days.map((date) => {
           const isToday = date === today;
           const dayTrainings = trainings.filter((t) => t.training_date === date);
+          const dayGalas = galas.filter((g) => g.event_date === date);
           return (
             <div key={date}>
               <div style={{ textAlign: 'center', paddingBottom: 10, marginBottom: 10, borderBottom: `2px solid ${isToday ? 'var(--accent)' : 'var(--border)'}` }}>
                 <div className="heading" style={{ fontSize: 13, color: isToday ? 'var(--accent)' : 'var(--muted-1)' }}>{dayLabel(date)}</div>
                 <div style={{ fontSize: 11, color: 'var(--muted-3)' }}>{dayFull(date)}</div>
               </div>
+              {dayGalas.map((g) => (
+                <div
+                  key={g.id}
+                  onClick={() => setSelectedGalaId(g.id)}
+                  style={{ background: GALA_COLOR, color: 'oklch(0.15 0.006 40)', padding: '10px', marginBottom: 8, cursor: 'pointer', textAlign: 'center' }}
+                >
+                  <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.5px', marginBottom: 2 }}>★ GALA</div>
+                  <div style={{ fontSize: 12, fontWeight: 700, lineHeight: 1.3 }}>{g.name}</div>
+                </div>
+              ))}
               {dayTrainings.map((t) => {
                 const meta = TRAINING_TYPE_META[t.type];
                 const ids = (attendees[t.id] ?? []).slice(0, 2);
@@ -103,7 +120,7 @@ export function CalendarPage() {
                   </div>
                 );
               })}
-              {dayTrainings.length === 0 && (
+              {dayTrainings.length === 0 && dayGalas.length === 0 && (
                 <div style={{ border: '1px dashed var(--border)', padding: '14px 8px', textAlign: 'center', fontSize: 11, color: 'var(--muted-4)' }}>No trainings</div>
               )}
             </div>
@@ -139,6 +156,10 @@ export function CalendarPage() {
 
       {planOpen && (
         <PlanTrainingModal defaultDate={today} onClose={() => setPlanOpen(false)} onCreated={load} />
+      )}
+
+      {selectedGala && (
+        <GalaDetailModal gala={selectedGala} directory={directory} onClose={() => setSelectedGalaId(null)} onGalaChanged={refreshGalas} />
       )}
     </div>
   );

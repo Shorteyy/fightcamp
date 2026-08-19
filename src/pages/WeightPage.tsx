@@ -2,12 +2,15 @@ import { useCallback, useEffect, useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../auth/AuthContext';
+import { useGalaDirectory } from '../hooks/useGalaDirectory';
 import { buildWeightChart, computeStatus } from '../lib/chart';
+import { effectiveDeadline, linkedGala } from '../lib/goals';
 import { todayISO } from '../lib/date';
 import type { WeightEntry } from '../types/database';
 
 export function WeightPage() {
   const { fighter, refreshFighter } = useAuth();
+  const { galasById, loading: galasLoading } = useGalaDirectory();
   const [history, setHistory] = useState<WeightEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [value, setValue] = useState('');
@@ -17,6 +20,7 @@ export function WeightPage() {
   const [goalWeight, setGoalWeight] = useState('');
   const [goalDeadline, setGoalDeadline] = useState('');
   const [savingGoal, setSavingGoal] = useState(false);
+  const [unlinking, setUnlinking] = useState(false);
 
   const load = useCallback(async () => {
     if (!fighter) return;
@@ -31,16 +35,26 @@ export function WeightPage() {
   }, [load]);
 
   if (!fighter) return <Navigate to="/dashboard" replace />;
-  if (loading) return <div style={{ color: 'var(--muted-2)' }}>Loading…</div>;
+  if (loading || galasLoading) return <div style={{ color: 'var(--muted-2)' }}>Loading…</div>;
 
-  const hasGoal = fighter.goal_weight_kg != null && fighter.goal_deadline;
+  const deadline = effectiveDeadline(fighter, galasById);
+  const gala = linkedGala(fighter, galasById);
+  const hasGoal = fighter.goal_weight_kg != null && deadline != null;
   const today = todayISO();
 
   const saveGoal = async () => {
     if (!goalWeight || !goalDeadline) return;
     setSavingGoal(true);
-    await supabase.from('fighters').update({ goal_weight_kg: parseFloat(goalWeight), goal_deadline: goalDeadline }).eq('profile_id', fighter.profile_id);
+    // A manually-entered deadline always overrides/clears any gala link.
+    await supabase.from('fighters').update({ goal_weight_kg: parseFloat(goalWeight), goal_deadline: goalDeadline, goal_gala_id: null }).eq('profile_id', fighter.profile_id);
     setSavingGoal(false);
+    await refreshFighter();
+  };
+
+  const unlinkFromGala = async () => {
+    setUnlinking(true);
+    await supabase.from('fighters').update({ goal_gala_id: null }).eq('profile_id', fighter.profile_id);
+    setUnlinking(false);
     await refreshFighter();
   };
 
@@ -69,13 +83,24 @@ export function WeightPage() {
     );
   }
 
-  const status = history.length > 0 ? computeStatus(history.map((h) => ({ date: h.entry_date, weight: h.weight_kg })), fighter.goal_weight_kg!, fighter.goal_deadline!, today) : null;
-  const chart = history.length > 0 ? buildWeightChart(history.map((h) => ({ date: h.entry_date, weight: h.weight_kg })), fighter.goal_weight_kg!, fighter.goal_deadline!, 760, 300) : null;
+  const status = history.length > 0 ? computeStatus(history.map((h) => ({ date: h.entry_date, weight: h.weight_kg })), fighter.goal_weight_kg!, deadline!, today) : null;
+  const chart = history.length > 0 ? buildWeightChart(history.map((h) => ({ date: h.entry_date, weight: h.weight_kg })), fighter.goal_weight_kg!, deadline!, 760, 300) : null;
   const recentEntries = [...history].reverse().slice(0, 6);
 
   return (
     <div>
       <h1 className="heading" style={{ fontSize: 44, margin: '0 0 24px 0' }}>WEIGHT &amp; GOALS</h1>
+
+      {gala && (
+        <div className="card" style={{ borderLeft: '4px solid var(--accent)', marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
+          <div style={{ fontSize: 14 }}>
+            🥊 Fight night at <strong>{gala.name}</strong>{status ? ` — ${status.daysLeft} days left` : ''}
+          </div>
+          <button className="btn-secondary" style={{ padding: '6px 10px', fontSize: 11 }} onClick={unlinkFromGala} disabled={unlinking}>
+            Unlink
+          </button>
+        </div>
+      )}
 
       {status && (
         <div className="card" style={{ borderLeft: `4px solid ${status.color}`, marginBottom: 24, display: 'flex', gap: 36, flexWrap: 'wrap', alignItems: 'center' }}>
@@ -89,7 +114,7 @@ export function WeightPage() {
         {chart ? (
           <svg width="100%" height="300" viewBox="0 0 760 300">
             <line x1={chart.markerX} y1="0" x2={chart.markerX} y2="270" stroke="oklch(0.5 0.01 40)" strokeWidth="1" strokeDasharray="3 3" />
-            <text x={chart.markerX} y="288" fontSize="11" fill="oklch(0.6 0.01 40)" textAnchor="middle">Goal: {fighter.goal_deadline}</text>
+            <text x={chart.markerX} y="288" fontSize="11" fill="oklch(0.6 0.01 40)" textAnchor="middle">Goal: {deadline}</text>
             <path d={chart.goalPath} stroke="oklch(0.5 0.01 40)" strokeWidth="1.5" strokeDasharray="5 5" fill="none" />
             <path d={chart.linePath} stroke="oklch(0.58 0.2 25)" strokeWidth="3" fill="none" />
             {chart.dots.map((d, i) => <circle key={i} cx={d.x} cy={d.y} r="4" fill="oklch(0.58 0.2 25)" />)}

@@ -3,15 +3,20 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../auth/AuthContext';
 import { useProfileDirectory } from '../hooks/useProfileDirectory';
+import { useGalaDirectory } from '../hooks/useGalaDirectory';
 import { TrainingDetailModal } from '../components/TrainingDetailModal';
+import { GalaDetailModal } from '../components/GalaDetailModal';
 import { TRAINING_TYPE_META } from '../lib/trainingTypes';
-import { todayISO, weekStart, weekDates } from '../lib/date';
+import { PARTICIPATION_META, GALA_COLOR } from '../lib/galas';
+import { effectiveDeadline } from '../lib/goals';
+import { todayISO, weekStart, weekDates, dayFull } from '../lib/date';
 import { buildWeightChart, computeStatus } from '../lib/chart';
-import type { Training, WeightEntry } from '../types/database';
+import type { Gala, GalaParticipationType, Training, WeightEntry } from '../types/database';
 
 export function DashboardPage() {
   const { profile, fighter } = useAuth();
   const { directory } = useProfileDirectory();
+  const { galasById, refresh: refreshGalas } = useGalaDirectory();
   const navigate = useNavigate();
 
   const [todaysTrainings, setTodaysTrainings] = useState<Training[]>([]);
@@ -20,7 +25,9 @@ export function DashboardPage() {
   const [fighterCount, setFighterCount] = useState(0);
   const [weightHistory, setWeightHistory] = useState<WeightEntry[]>([]);
   const [caloriesToday, setCaloriesToday] = useState(0);
+  const [myGalaParticipation, setMyGalaParticipation] = useState<Record<string, GalaParticipationType>>({});
   const [selectedTrainingId, setSelectedTrainingId] = useState<string | null>(null);
+  const [selectedGalaId, setSelectedGalaId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   const today = todayISO();
@@ -81,6 +88,13 @@ export function DashboardPage() {
       setCaloriesToday((meals ?? []).reduce((a, m) => a + m.calories, 0));
     }
 
+    if (profile) {
+      const { data: parts } = await supabase.from('gala_participants').select('gala_id, participation_type').eq('profile_id', profile.id);
+      const map: Record<string, GalaParticipationType> = {};
+      for (const p of parts ?? []) map[p.gala_id] = p.participation_type;
+      setMyGalaParticipation(map);
+    }
+
     setLoading(false);
   }, [today, wStart, wEnd, fighter, profile]);
 
@@ -90,15 +104,21 @@ export function DashboardPage() {
 
   if (loading) return <div style={{ color: 'var(--muted-2)' }}>Loading…</div>;
 
-  const hasGoal = fighter && fighter.goal_weight_kg != null && fighter.goal_deadline;
+  const deadline = fighter ? effectiveDeadline(fighter, galasById) : null;
+  const hasGoal = fighter && fighter.goal_weight_kg != null && deadline != null;
   const status = hasGoal && weightHistory.length > 0
-    ? computeStatus(weightHistory.map((h) => ({ date: h.entry_date, weight: h.weight_kg })), fighter!.goal_weight_kg!, fighter!.goal_deadline!, today)
+    ? computeStatus(weightHistory.map((h) => ({ date: h.entry_date, weight: h.weight_kg })), fighter!.goal_weight_kg!, deadline!, today)
     : null;
   const chart = hasGoal && weightHistory.length > 0
-    ? buildWeightChart(weightHistory.map((h) => ({ date: h.entry_date, weight: h.weight_kg })), fighter!.goal_weight_kg!, fighter!.goal_deadline!, 400, 140)
+    ? buildWeightChart(weightHistory.map((h) => ({ date: h.entry_date, weight: h.weight_kg })), fighter!.goal_weight_kg!, deadline!, 400, 140)
     : null;
 
   const selectedTraining = todaysTrainings.find((t) => t.id === selectedTrainingId) ?? null;
+  const selectedGala = selectedGalaId ? galasById[selectedGalaId] ?? null : null;
+  const myUpcomingGalas: Gala[] = Object.keys(myGalaParticipation)
+    .map((id) => galasById[id])
+    .filter((g): g is Gala => !!g && g.event_date >= today)
+    .sort((a, b) => a.event_date.localeCompare(b.event_date));
 
   return (
     <div>
@@ -140,6 +160,28 @@ export function DashboardPage() {
           <div style={{ border: '1px dashed var(--border-light)', padding: 24, width: 260, color: 'var(--muted-3)', fontSize: 13 }}>No trainings scheduled today.</div>
         )}
       </div>
+
+      {myUpcomingGalas.length > 0 && (
+        <>
+          <div className="label" style={{ fontSize: 18, marginBottom: 14 }}>YOUR UPCOMING GALAS</div>
+          <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 36 }}>
+            {myUpcomingGalas.map((g) => (
+              <div
+                key={g.id}
+                onClick={() => setSelectedGalaId(g.id)}
+                className="card"
+                style={{ borderTop: `4px solid ${GALA_COLOR}`, width: 260, padding: 18, cursor: 'pointer' }}
+              >
+                <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1, color: GALA_COLOR, marginBottom: 8 }}>
+                  ★ {PARTICIPATION_META[myGalaParticipation[g.id]].label.toUpperCase()}
+                </div>
+                <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 6 }}>{g.name}</div>
+                <div style={{ color: 'var(--muted-2)', fontSize: 13 }}>{dayFull(g.event_date)} · {g.location || 'Location TBD'}</div>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
 
       <div style={{ display: 'grid', gridTemplateColumns: fighter ? '1.3fr 1fr' : '1fr', gap: 20 }}>
         {fighter && (
@@ -201,6 +243,18 @@ export function DashboardPage() {
           currentFighterId={fighter?.profile_id ?? null}
           onClose={() => setSelectedTrainingId(null)}
           onChanged={load}
+        />
+      )}
+
+      {selectedGala && (
+        <GalaDetailModal
+          gala={selectedGala}
+          directory={directory}
+          onClose={() => setSelectedGalaId(null)}
+          onGalaChanged={() => {
+            refreshGalas();
+            load();
+          }}
         />
       )}
     </div>
