@@ -90,6 +90,7 @@ export interface MealPlan {
   owner_id: string;
   created_by: string | null;
   dietary_tags: string[];
+  is_following: boolean;
   shopping_list: ShoppingListCategory[] | null;
   shopping_list_generated_at: string | null;
   created_at: string;

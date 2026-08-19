@@ -7,9 +7,10 @@ import { usePagination } from '../hooks/usePagination';
 import { PaginationControls } from '../components/PaginationControls';
 import { MEAL_GROUPS, MEAL_GROUP_META } from '../lib/trainingTypes';
 import { MealPlanEditorModal } from '../components/MealPlanEditorModal';
+import { LogFromPlanModal } from '../components/LogFromPlanModal';
 import { DIETARY_RESTRICTIONS, dietaryRestrictionLabel } from '../lib/dietaryRestrictions';
-import { todayISO } from '../lib/date';
-import type { MealEntry, MealGroup, MealPlan } from '../types/database';
+import { todayISO, dayOfWeekIndex } from '../lib/date';
+import type { MealEntry, MealGroup, MealPlan, MealPlanItem } from '../types/database';
 
 const MACRO_TARGETS = [
   { key: 'protein_g' as const, label: 'Protein', target: 180, color: 'oklch(0.58 0.2 25)' },
@@ -81,6 +82,8 @@ export function NutritionPage() {
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
   const [selectedHistoryDate, setSelectedHistoryDate] = useState<string | null>(null);
   const [tagFilter, setTagFilter] = useState<string[]>([]);
+  const [followingItems, setFollowingItems] = useState<MealPlanItem[]>([]);
+  const [logFromPlanOpen, setLogFromPlanOpen] = useState(false);
   const [loading, setLoading] = useState(true);
 
   const today = todayISO();
@@ -96,10 +99,19 @@ export function NutritionPage() {
     setAllEntries((allForFighter ?? []) as MealEntry[]);
 
     const { data: plans } = await supabase.from('meal_plans').select('*').eq('owner_id', profile.id).order('updated_at', { ascending: false });
-    setMyPlans((plans ?? []) as MealPlan[]);
+    const myPlanRows = (plans ?? []) as MealPlan[];
+    setMyPlans(myPlanRows);
 
     const { data: all } = await supabase.from('meal_plans').select('*').order('updated_at', { ascending: false });
     setAllPlans((all ?? []) as MealPlan[]);
+
+    const following = myPlanRows.find((p) => p.is_following);
+    if (following) {
+      const { data: fItems } = await supabase.from('meal_plan_items').select('*').eq('meal_plan_id', following.id).eq('day_of_week', dayOfWeekIndex(today));
+      setFollowingItems((fItems ?? []) as MealPlanItem[]);
+    } else {
+      setFollowingItems([]);
+    }
 
     setLoading(false);
   }, [fighter, profile, today]);
@@ -150,6 +162,32 @@ export function NutritionPage() {
   const deletePlan = async (id: string) => {
     if (!confirm('Delete this meal plan?')) return;
     await supabase.from('meal_plans').delete().eq('id', id);
+    await load();
+  };
+
+  const toggleFollowing = async (plan: MealPlan) => {
+    if (plan.is_following) {
+      await supabase.from('meal_plans').update({ is_following: false }).eq('id', plan.id);
+    } else {
+      await supabase.from('meal_plans').update({ is_following: false }).eq('owner_id', profile.id).eq('is_following', true);
+      await supabase.from('meal_plans').update({ is_following: true }).eq('id', plan.id);
+    }
+    await load();
+  };
+
+  const quickLog = async (group: MealGroup, item: MealPlanItem) => {
+    const name = item.name?.trim() || item.description?.trim();
+    if (!name) return;
+    await supabase.from('meal_entries').insert({
+      fighter_id: fighter.profile_id,
+      entry_date: today,
+      meal_group: group,
+      name,
+      calories: item.calories ?? 0,
+      protein_g: item.protein_g ?? 0,
+      carbs_g: item.carbs_g ?? 0,
+      fat_g: item.fat_g ?? 0,
+    });
     await load();
   };
 
@@ -219,6 +257,33 @@ export function NutritionPage() {
 
       {tab === 'today' ? (
         <div>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 14 }}>
+            <button className="btn-secondary" onClick={() => setLogFromPlanOpen(true)}>Log from a meal plan…</button>
+          </div>
+
+          {followingItems.length > 0 && (
+            <div className="card" style={{ padding: '18px 22px', marginBottom: 20, borderLeft: '4px solid var(--accent)' }}>
+              <div className="label" style={{ fontSize: 14, marginBottom: 10 }}>SUGGESTED FROM YOUR PLAN TODAY</div>
+              {MEAL_GROUPS.map((group) => {
+                const item = followingItems.find((it) => it.meal_group === group);
+                const name = item?.name?.trim() || item?.description?.trim();
+                if (!name) return null;
+                const alreadyLogged = entries.some((e) => e.meal_group === group && e.name === name);
+                return (
+                  <div key={group} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', borderBottom: '1px solid var(--border)', fontSize: 13 }}>
+                    <div>
+                      <span style={{ color: 'var(--muted-3)', fontSize: 11, marginRight: 8 }}>{MEAL_GROUP_META[group].label}</span>
+                      {name}{item?.calories != null && <span style={{ color: 'var(--muted-2)' }}> · {item.calories} kcal</span>}
+                    </div>
+                    <button className="btn-secondary" style={{ padding: '4px 10px', fontSize: 11 }} disabled={alreadyLogged} onClick={() => quickLog(group, item!)}>
+                      {alreadyLogged ? 'Logged' : 'Log this'}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
           <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', gap: 20, marginBottom: 28 }}>
             <div className="card" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
               <svg width="150" height="150" viewBox="0 0 150 150">
@@ -279,9 +344,16 @@ export function NutritionPage() {
                 >
                   ✕
                 </button>
-                <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 6 }}>{p.name}</div>
+                <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 6, paddingRight: 20 }}>{p.name}</div>
                 <div style={{ fontSize: 12, color: 'var(--muted-3)', marginBottom: 6 }}>Updated {p.updated_at.slice(0, 10)}</div>
                 <PlanTagBadges tags={p.dietary_tags} />
+                <button
+                  onClick={(e) => { e.stopPropagation(); toggleFollowing(p); }}
+                  className="btn-secondary"
+                  style={{ marginTop: 10, padding: '4px 10px', fontSize: 11, background: p.is_following ? 'var(--accent)' : 'transparent', color: p.is_following ? 'oklch(0.98 0 0)' : undefined }}
+                >
+                  {p.is_following ? 'FOLLOWING' : 'Follow'}
+                </button>
               </div>
             ))}
             {filteredMyPlans.length === 0 && myPlans.length > 0 && <div style={{ color: 'var(--muted-3)', fontSize: 13 }}>No plans match the selected tags.</div>}
@@ -382,6 +454,15 @@ export function NutritionPage() {
           canAssign={profile.role === 'coach'}
           onClose={() => setSelectedPlanId(null)}
           onSaved={load}
+        />
+      )}
+
+      {logFromPlanOpen && (
+        <LogFromPlanModal
+          ownerId={fighter.profile_id}
+          plans={myPlans}
+          onClose={() => setLogFromPlanOpen(false)}
+          onLogged={load}
         />
       )}
     </div>
