@@ -4,6 +4,7 @@ import { useAuth } from '../auth/AuthContext';
 import { MEAL_GROUPS, MEAL_GROUP_META, DAY_LABELS } from '../lib/trainingTypes';
 import { AssignMealPlanModal } from './AssignMealPlanModal';
 import { GenerateMealPlanPanel, type GeneratedPlan } from './GenerateMealPlanPanel';
+import { ShoppingListPanel } from './ShoppingListPanel';
 import { DIETARY_RESTRICTIONS, dietaryRestrictionLabel } from '../lib/dietaryRestrictions';
 import type { DirectoryEntry } from '../hooks/useProfileDirectory';
 import type { MealPlan, MealPlanItem } from '../types/database';
@@ -40,6 +41,7 @@ export function MealPlanEditorModal({ plan, directory, canAssign, onClose, onSav
   const [saving, setSaving] = useState(false);
   const [assignOpen, setAssignOpen] = useState(false);
   const [generateOpen, setGenerateOpen] = useState(false);
+  const [shoppingListOpen, setShoppingListOpen] = useState(false);
   const [estimating, setEstimating] = useState(false);
   const [estimateError, setEstimateError] = useState<string | null>(null);
 
@@ -248,6 +250,7 @@ export function MealPlanEditorModal({ plan, directory, canAssign, onClose, onSav
                   {estimating ? 'ESTIMATING…' : `Estimate missing values (${missingCount})`}
                 </button>
               )}
+              <button className="btn-secondary" onClick={() => setShoppingListOpen(true)}>Shopping list…</button>
             </>
           )}
           {canAssign && (
@@ -257,6 +260,7 @@ export function MealPlanEditorModal({ plan, directory, canAssign, onClose, onSav
       </div>
 
       {assignOpen && <AssignMealPlanModal plan={plan} directory={directory} onClose={() => setAssignOpen(false)} onAssigned={onSaved} />}
+      {shoppingListOpen && <ShoppingListPanel plan={plan} onClose={() => setShoppingListOpen(false)} onSaved={onSaved} />}
     </div>
   );
 }

@@ -74,12 +74,24 @@ export interface MealEntry {
   created_at: string;
 }
 
+export interface ShoppingListItem {
+  name: string;
+  quantity: string;
+}
+
+export interface ShoppingListCategory {
+  category: string;
+  items: ShoppingListItem[];
+}
+
 export interface MealPlan {
   id: string;
   name: string;
   owner_id: string;
   created_by: string | null;
   dietary_tags: string[];
+  shopping_list: ShoppingListCategory[] | null;
+  shopping_list_generated_at: string | null;
   created_at: string;
   updated_at: string;
 }
