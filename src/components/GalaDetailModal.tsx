@@ -3,6 +3,8 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../auth/AuthContext';
 import { PARTICIPATION_META, PARTICIPATION_TYPES } from '../lib/galas';
 import { dayFull } from '../lib/date';
+import { usePagination } from '../hooks/usePagination';
+import { PaginationControls } from './PaginationControls';
 import { CreateGalaModal } from './CreateGalaModal';
 import type { DirectoryEntry } from '../hooks/useProfileDirectory';
 import type { Gala, GalaParticipant, GalaParticipationType, Goal } from '../types/database';
@@ -135,24 +137,7 @@ export function GalaDetailModal({ gala, directory, onClose, onGalaChanged }: Pro
           PARTICIPATION_TYPES.map((type) => {
             const list = grouped[type];
             if (list.length === 0) return null;
-            const meta = PARTICIPATION_META[type];
-            return (
-              <div key={type} style={{ marginBottom: 16 }}>
-                <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: 1, color: meta.color, marginBottom: 8 }}>{meta.label.toUpperCase()} ({list.length})</div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {list.map((p) => {
-                    const d = directory[p.profile_id];
-                    if (!d) return null;
-                    return (
-                      <div key={p.profile_id} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                        <div style={{ width: 26, height: 26, borderRadius: '50%', background: d.hueColor, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700 }}>{d.initials}</div>
-                        <span style={{ fontSize: 13 }}>{d.name}</span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            );
+            return <ParticipantGroup key={type} type={type} participants={list} directory={directory} />;
           })
         )}
         {!loading && participants.length === 0 && <div style={{ fontSize: 12, color: 'var(--muted-4)' }}>No one has declared participation yet.</div>}
@@ -161,6 +146,29 @@ export function GalaDetailModal({ gala, directory, onClose, onGalaChanged }: Pro
       {editOpen && (
         <CreateGalaModal editing={gala} onClose={() => setEditOpen(false)} onSaved={onGalaChanged} />
       )}
+    </div>
+  );
+}
+
+function ParticipantGroup({ type, participants, directory }: { type: GalaParticipationType; participants: GalaParticipant[]; directory: Record<string, DirectoryEntry> }) {
+  const meta = PARTICIPATION_META[type];
+  const { pageItems, page, totalPages, setPage } = usePagination(participants);
+  return (
+    <div style={{ marginBottom: 16 }}>
+      <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: 1, color: meta.color, marginBottom: 8 }}>{meta.label.toUpperCase()} ({participants.length})</div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {pageItems.map((p) => {
+          const d = directory[p.profile_id];
+          if (!d) return null;
+          return (
+            <div key={p.profile_id} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div style={{ width: 26, height: 26, borderRadius: '50%', background: d.hueColor, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700 }}>{d.initials}</div>
+              <span style={{ fontSize: 13 }}>{d.name}</span>
+            </div>
+          );
+        })}
+      </div>
+      <PaginationControls page={page} totalPages={totalPages} onChange={setPage} />
     </div>
   );
 }

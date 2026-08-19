@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { useAuth } from '../auth/AuthContext';
 import { useProfileDirectory } from '../hooks/useProfileDirectory';
 import { useGalaDirectory } from '../hooks/useGalaDirectory';
+import { usePagination } from '../hooks/usePagination';
+import { PaginationControls } from '../components/PaginationControls';
 import { CreateGalaModal } from '../components/CreateGalaModal';
 import { GalaDetailModal } from '../components/GalaDetailModal';
 import { GALA_COLOR } from '../lib/galas';
@@ -19,7 +21,8 @@ export function GalasPage() {
   const isCoach = profile?.role === 'coach';
   const upcoming = galas.filter((g) => g.event_date >= today);
   const past = [...galas.filter((g) => g.event_date < today)].reverse();
-  const shown = tab === 'upcoming' ? upcoming : past;
+  const shownAll = tab === 'upcoming' ? upcoming : past;
+  const { pageItems: shown, page, totalPages, setPage } = usePagination(shownAll);
   const selected = galas.find((g) => g.id === selectedId) ?? null;
 
   if (loading) return <div style={{ color: 'var(--muted-2)' }}>Loading…</div>;
@@ -61,10 +64,11 @@ export function GalasPage() {
             + CREATE GALA
           </div>
         )}
-        {shown.length === 0 && !isCoach && (
+        {shownAll.length === 0 && !isCoach && (
           <div style={{ color: 'var(--muted-3)', fontSize: 13 }}>No {tab} galas.</div>
         )}
       </div>
+      <PaginationControls page={page} totalPages={totalPages} onChange={setPage} />
 
       {createOpen && <CreateGalaModal onClose={() => setCreateOpen(false)} onSaved={refresh} />}
       {selected && (

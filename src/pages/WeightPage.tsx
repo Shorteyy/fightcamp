@@ -3,6 +3,8 @@ import { Navigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../auth/AuthContext';
 import { useGalaDirectory } from '../hooks/useGalaDirectory';
+import { usePagination } from '../hooks/usePagination';
+import { PaginationControls } from '../components/PaginationControls';
 import { buildWeightChart, computeStatus } from '../lib/chart';
 import { effectiveDeadline, linkedGala } from '../lib/goals';
 import { todayISO } from '../lib/date';
@@ -43,6 +45,9 @@ export function WeightPage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  const reversedHistory = [...history].reverse();
+  const entriesPagination = usePagination(reversedHistory);
 
   if (!fighter || !profile) return <Navigate to="/dashboard" replace />;
   if (loading || galasLoading) return <div style={{ color: 'var(--muted-2)' }}>Loading…</div>;
@@ -155,8 +160,6 @@ export function WeightPage() {
   const chart = activeGoal && deadline && history.length > 0
     ? buildWeightChart(history.map((h) => ({ date: h.entry_date, weight: h.weight_kg })), activeGoal.target_weight_kg, deadline, 760, 300)
     : null;
-  const recentEntries = [...history].reverse().slice(0, 6);
-
   return (
     <div>
       <h1 className="heading" style={{ fontSize: 44, margin: '0 0 24px 0' }}>WEIGHT &amp; GOALS</h1>
@@ -216,14 +219,15 @@ export function WeightPage() {
           </button>
         </div>
         <div className="card" style={{ padding: 22 }}>
-          <div className="label" style={{ fontSize: 16, marginBottom: 14 }}>RECENT ENTRIES</div>
-          {recentEntries.map((e) => (
+          <div className="label" style={{ fontSize: 16, marginBottom: 14 }}>WEIGHT HISTORY</div>
+          {entriesPagination.pageItems.map((e) => (
             <div key={e.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--border)', fontSize: 13 }}>
               <span style={{ color: 'var(--muted-2)' }}>{e.entry_date}</span>
               <span style={{ fontWeight: 600 }}>{e.weight_kg} kg</span>
             </div>
           ))}
-          {recentEntries.length === 0 && <div style={{ fontSize: 12, color: 'var(--muted-4)' }}>No entries yet.</div>}
+          {reversedHistory.length === 0 && <div style={{ fontSize: 12, color: 'var(--muted-4)' }}>No entries yet.</div>}
+          <PaginationControls page={entriesPagination.page} totalPages={entriesPagination.totalPages} onChange={entriesPagination.setPage} />
         </div>
       </div>
 
@@ -233,10 +237,11 @@ export function WeightPage() {
 }
 
 function GoalHistoryList({ goals, galasById, onDelete }: { goals: Goal[]; galasById: Parameters<typeof effectiveDeadline>[1]; onDelete: (id: string) => void }) {
+  const { pageItems, page, totalPages, setPage } = usePagination(goals);
   return (
     <div className="card" style={{ padding: 22 }}>
       <div className="label" style={{ fontSize: 16, marginBottom: 14 }}>GOAL HISTORY</div>
-      {goals.map((g) => {
+      {pageItems.map((g) => {
         const gDeadline = effectiveDeadline(g, galasById);
         const gGala = linkedGala(g, galasById);
         return (
@@ -252,6 +257,7 @@ function GoalHistoryList({ goals, galasById, onDelete }: { goals: Goal[]; galasB
           </div>
         );
       })}
+      <PaginationControls page={page} totalPages={totalPages} onChange={setPage} />
     </div>
   );
 }

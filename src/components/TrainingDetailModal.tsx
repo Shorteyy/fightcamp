@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { TRAINING_TYPE_META } from '../lib/trainingTypes';
 import { dayFull } from '../lib/date';
+import { usePagination } from '../hooks/usePagination';
+import { PaginationControls } from './PaginationControls';
 import type { Training } from '../types/database';
 import type { DirectoryEntry } from '../hooks/useProfileDirectory';
 
@@ -18,6 +20,7 @@ export function TrainingDetailModal({ training, attendeeIds, directory, currentF
   const [busy, setBusy] = useState(false);
   const meta = TRAINING_TYPE_META[training.type];
   const joined = currentFighterId ? attendeeIds.includes(currentFighterId) : false;
+  const { pageItems, page, totalPages, setPage } = usePagination(attendeeIds);
 
   const join = async () => {
     if (!currentFighterId) return;
@@ -50,9 +53,9 @@ export function TrainingDetailModal({ training, attendeeIds, directory, currentF
         </div>
         {training.notes && <div style={{ fontSize: 14, color: 'oklch(0.85 0.005 40)', lineHeight: 1.5, marginBottom: 20 }}>{training.notes}</div>}
         <div className="label" style={{ fontSize: 14, marginBottom: 10 }}>ATTENDEES</div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 24 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 8 }}>
           {attendeeIds.length === 0 && <div style={{ fontSize: 12, color: 'var(--muted-4)' }}>No one has joined yet.</div>}
-          {attendeeIds.map((id) => {
+          {pageItems.map((id) => {
             const d = directory[id];
             if (!d) return null;
             return (
@@ -63,6 +66,8 @@ export function TrainingDetailModal({ training, attendeeIds, directory, currentF
             );
           })}
         </div>
+        <PaginationControls page={page} totalPages={totalPages} onChange={setPage} />
+        <div style={{ marginBottom: 16 }} />
         {currentFighterId && (
           joined ? (
             <button className="btn-secondary" style={{ width: '100%', padding: 14 }} onClick={leave} disabled={busy}>LEAVE TRAINING</button>
