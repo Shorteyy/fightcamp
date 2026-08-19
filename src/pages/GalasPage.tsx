@@ -49,11 +49,28 @@ export function GalasPage() {
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(240px,1fr))', gap: 18 }}>
         {shown.map((g) => (
-          <div key={g.id} onClick={() => setSelectedId(g.id)} className="card" style={{ borderTop: `4px solid ${GALA_COLOR}`, padding: 20, cursor: 'pointer' }}>
-            <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1, color: GALA_COLOR, marginBottom: 8 }}>★ GALA</div>
-            <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 6 }}>{g.name}</div>
-            <div style={{ fontSize: 13, color: 'var(--muted-2)' }}>{dayFull(g.event_date)}</div>
-            <div style={{ fontSize: 13, color: 'var(--muted-2)' }}>{g.location || 'Location TBD'}</div>
+          <div key={g.id} onClick={() => setSelectedId(g.id)} className="card" style={{ borderTop: `4px solid ${GALA_COLOR}`, padding: 20, cursor: 'pointer', position: 'relative', overflow: 'hidden' }}>
+            {g.poster_url && (
+              <div
+                style={{
+                  position: 'absolute',
+                  inset: 0,
+                  backgroundImage: `url(${g.poster_url})`,
+                  backgroundSize: 'cover',
+                  backgroundPosition: 'center',
+                  opacity: 0.4,
+                  filter: 'saturate(0.85)',
+                  maskImage: 'radial-gradient(ellipse at center, black 40%, transparent 88%)',
+                  WebkitMaskImage: 'radial-gradient(ellipse at center, black 40%, transparent 88%)',
+                }}
+              />
+            )}
+            <div style={{ position: 'relative', zIndex: 1 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1, color: GALA_COLOR, marginBottom: 8 }}>★ GALA</div>
+              <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 6 }}>{g.name}</div>
+              <div style={{ fontSize: 13, color: 'var(--muted-2)' }}>{dayFull(g.event_date)}</div>
+              <div style={{ fontSize: 13, color: 'var(--muted-2)' }}>{g.location || 'Location TBD'}</div>
+            </div>
           </div>
         ))}
         {isCoach && tab === 'upcoming' && (

@@ -104,9 +104,19 @@ export function GalaDetailModal({ gala, directory, onClose, onGalaChanged }: Pro
         </div>
 
         {gala.poster_url && (
-          <div style={{ marginBottom: 14 }}>
-            <a href={gala.poster_url} target="_blank" rel="noreferrer" style={{ fontSize: 13 }}>View poster</a>
-          </div>
+          <div
+            style={{
+              height: 160,
+              marginBottom: 16,
+              backgroundImage: `url(${gala.poster_url})`,
+              backgroundSize: 'cover',
+              backgroundPosition: 'center',
+              opacity: 0.55,
+              filter: 'saturate(0.85)',
+              maskImage: 'radial-gradient(ellipse at center, black 45%, transparent 90%)',
+              WebkitMaskImage: 'radial-gradient(ellipse at center, black 45%, transparent 90%)',
+            }}
+          />
         )}
         {gala.notes && <div style={{ fontSize: 14, color: 'oklch(0.85 0.005 40)', lineHeight: 1.5, marginBottom: 20 }}>{gala.notes}</div>}
 
