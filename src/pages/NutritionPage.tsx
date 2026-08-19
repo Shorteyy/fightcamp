@@ -44,12 +44,14 @@ function AddFoodForm({ onSubmit, onCancel }: { onSubmit: (v: { name: string; cal
 export function NutritionPage() {
   const { fighter, profile } = useAuth();
   const { directory } = useProfileDirectory();
-  const [tab, setTab] = useState<'today' | 'plan' | 'all'>('today');
+  const [tab, setTab] = useState<'today' | 'plan' | 'all' | 'history'>('today');
   const [entries, setEntries] = useState<MealEntry[]>([]);
+  const [allEntries, setAllEntries] = useState<MealEntry[]>([]);
   const [openForm, setOpenForm] = useState<MealGroup | null>(null);
   const [myPlans, setMyPlans] = useState<MealPlan[]>([]);
   const [allPlans, setAllPlans] = useState<MealPlan[]>([]);
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
+  const [selectedHistoryDate, setSelectedHistoryDate] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   const today = todayISO();
@@ -60,6 +62,9 @@ export function NutritionPage() {
     setLoading(true);
     const { data } = await supabase.from('meal_entries').select('*').eq('fighter_id', fighter.profile_id).eq('entry_date', today);
     setEntries(data ?? []);
+
+    const { data: allForFighter } = await supabase.from('meal_entries').select('*').eq('fighter_id', fighter.profile_id).order('entry_date', { ascending: false });
+    setAllEntries((allForFighter ?? []) as MealEntry[]);
 
     const { data: plans } = await supabase.from('meal_plans').select('*').eq('owner_id', profile.id).order('updated_at', { ascending: false });
     setMyPlans((plans ?? []) as MealPlan[]);
@@ -76,6 +81,19 @@ export function NutritionPage() {
 
   const myPlansPagination = usePagination(myPlans);
   const allPlansPagination = usePagination(allPlans);
+
+  const dailyTotals = Array.from(new Set(allEntries.map((e) => e.entry_date))).map((date) => {
+    const dayEntries = allEntries.filter((e) => e.entry_date === date);
+    return {
+      date,
+      calories: dayEntries.reduce((a, e) => a + e.calories, 0),
+      protein: dayEntries.reduce((a, e) => a + e.protein_g, 0),
+      carbs: dayEntries.reduce((a, e) => a + e.carbs_g, 0),
+      fat: dayEntries.reduce((a, e) => a + e.fat_g, 0),
+    };
+  });
+  const historyPagination = usePagination(dailyTotals);
+  const selectedHistoryEntries = selectedHistoryDate ? allEntries.filter((e) => e.entry_date === selectedHistoryDate) : [];
 
   if (!fighter || !profile) return <Navigate to="/dashboard" replace />;
   if (loading) return <div style={{ color: 'var(--muted-2)' }}>Loading…</div>;
@@ -131,6 +149,12 @@ export function NutritionPage() {
             style={{ padding: '10px 18px', border: 'none', fontFamily: "'Bebas Neue', sans-serif", letterSpacing: 1, fontSize: 13, background: tab === 'all' ? 'var(--accent)' : 'transparent', color: tab === 'all' ? 'oklch(0.98 0 0)' : 'oklch(0.65 0.01 40)' }}
           >
             ALL PLANS
+          </button>
+          <button
+            onClick={() => setTab('history')}
+            style={{ padding: '10px 18px', border: 'none', fontFamily: "'Bebas Neue', sans-serif", letterSpacing: 1, fontSize: 13, background: tab === 'history' ? 'var(--accent)' : 'transparent', color: tab === 'history' ? 'oklch(0.98 0 0)' : 'oklch(0.65 0.01 40)' }}
+          >
+            HISTORY
           </button>
         </div>
       </div>
@@ -209,7 +233,7 @@ export function NutritionPage() {
           </div>
           <PaginationControls page={myPlansPagination.page} totalPages={myPlansPagination.totalPages} onChange={myPlansPagination.setPage} />
         </>
-      ) : (
+      ) : tab === 'all' ? (
         <>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(220px,1fr))', gap: 16 }}>
             {allPlansPagination.pageItems.map((p) => {
@@ -234,6 +258,57 @@ export function NutritionPage() {
           </div>
           <PaginationControls page={allPlansPagination.page} totalPages={allPlansPagination.totalPages} onChange={allPlansPagination.setPage} />
         </>
+      ) : (
+        <div className="card" style={{ padding: 22 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.4fr 1fr 1fr 1fr', gap: 8, fontSize: 11, color: 'var(--muted-3)', letterSpacing: '0.5px', paddingBottom: 8, borderBottom: '1px solid var(--border)', marginBottom: 4 }}>
+            <div>DATE</div>
+            <div>CALORIES</div>
+            <div>PROTEIN</div>
+            <div>CARBS</div>
+            <div>FAT</div>
+          </div>
+          {historyPagination.pageItems.map((d) => (
+            <div
+              key={d.date}
+              onClick={() => setSelectedHistoryDate(d.date)}
+              style={{ display: 'grid', gridTemplateColumns: '1fr 1.4fr 1fr 1fr 1fr', gap: 8, padding: '8px 0', borderBottom: '1px solid var(--border)', fontSize: 13, cursor: 'pointer' }}
+            >
+              <div>{d.date}</div>
+              <div style={{ fontWeight: 600 }}>{d.calories} / {fighter.daily_calorie_target} kcal</div>
+              <div style={{ color: 'var(--muted-2)' }}>{d.protein}g / {MACRO_TARGETS[0].target}g</div>
+              <div style={{ color: 'var(--muted-2)' }}>{d.carbs}g / {MACRO_TARGETS[1].target}g</div>
+              <div style={{ color: 'var(--muted-2)' }}>{d.fat}g / {MACRO_TARGETS[2].target}g</div>
+            </div>
+          ))}
+          {dailyTotals.length === 0 && <div style={{ fontSize: 12, color: 'var(--muted-4)', padding: '8px 0' }}>No logged days yet.</div>}
+          <PaginationControls page={historyPagination.page} totalPages={historyPagination.totalPages} onChange={historyPagination.setPage} />
+        </div>
+      )}
+
+      {selectedHistoryDate && (
+        <div className="modal-backdrop" onClick={() => setSelectedHistoryDate(null)}>
+          <div className="modal-panel" onClick={(e) => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+              <div className="heading" style={{ fontSize: 22 }}>{selectedHistoryDate}</div>
+              <button onClick={() => setSelectedHistoryDate(null)} style={{ background: 'transparent', border: 'none', color: 'var(--muted-2)', fontSize: 20 }}>✕</button>
+            </div>
+            {MEAL_GROUPS.map((group) => {
+              const items = selectedHistoryEntries.filter((e) => e.meal_group === group);
+              return (
+                <div key={group} style={{ marginBottom: 14 }}>
+                  <div className="label" style={{ fontSize: 14, marginBottom: 8 }}>{MEAL_GROUP_META[group].label}</div>
+                  {items.map((it) => (
+                    <div key={it.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid var(--border)', fontSize: 13 }}>
+                      <span>{it.name}</span>
+                      <span style={{ color: 'var(--muted-2)' }}>{it.calories} kcal</span>
+                    </div>
+                  ))}
+                  {items.length === 0 && <div style={{ fontSize: 12, color: 'var(--muted-4)' }}>Nothing logged.</div>}
+                </div>
+              );
+            })}
+          </div>
+        </div>
       )}
 
       {selectedPlan && (
