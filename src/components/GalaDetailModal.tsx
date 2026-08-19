@@ -24,6 +24,7 @@ export function GalaDetailModal({ gala, directory, onClose, onGalaChanged }: Pro
   const [editOpen, setEditOpen] = useState(false);
   const [goalWeightInput, setGoalWeightInput] = useState('');
   const [savingGoal, setSavingGoal] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const load = useCallback(async () => {
     const { data } = await supabase.from('gala_participants').select('*').eq('gala_id', gala.id);
@@ -71,6 +72,15 @@ export function GalaDetailModal({ gala, directory, onClose, onGalaChanged }: Pro
     await load();
   };
 
+  const deleteGala = async () => {
+    if (!confirm(`Delete "${gala.name}"? Anyone's goal tied to this gala will keep its deadline (frozen to this gala's date) but no longer be linked to a gala.`)) return;
+    setDeleting(true);
+    await supabase.from('galas').delete().eq('id', gala.id);
+    setDeleting(false);
+    onGalaChanged();
+    onClose();
+  };
+
   const grouped: Record<GalaParticipationType, GalaParticipant[]> = { attending: [], attending_vip: [], fighting: [], cornering: [] };
   for (const p of participants) grouped[p.participation_type].push(p);
 
@@ -84,7 +94,10 @@ export function GalaDetailModal({ gala, directory, onClose, onGalaChanged }: Pro
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
             {isCoach && (
-              <button className="btn-secondary" style={{ padding: '6px 10px', fontSize: 11 }} onClick={() => setEditOpen(true)}>Edit</button>
+              <>
+                <button className="btn-secondary" style={{ padding: '6px 10px', fontSize: 11 }} onClick={() => setEditOpen(true)}>Edit</button>
+                <button className="btn-secondary" style={{ padding: '6px 10px', fontSize: 11, color: 'var(--accent)' }} onClick={deleteGala} disabled={deleting}>Delete</button>
+              </>
             )}
             <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: 'var(--muted-2)', fontSize: 20 }}>✕</button>
           </div>
