@@ -48,7 +48,17 @@ export function AssignMealPlanModal({ plan, directory, onClose, onAssigned }: Pr
       if (!newPlan) continue;
       if (sourceItems.length > 0) {
         await supabase.from('meal_plan_items').insert(
-          sourceItems.map((it) => ({ meal_plan_id: newPlan.id, day_of_week: it.day_of_week, meal_group: it.meal_group, description: it.description })),
+          sourceItems.map((it) => ({
+            meal_plan_id: newPlan.id,
+            day_of_week: it.day_of_week,
+            meal_group: it.meal_group,
+            description: it.description,
+            name: it.name,
+            calories: it.calories,
+            protein_g: it.protein_g,
+            carbs_g: it.carbs_g,
+            fat_g: it.fat_g,
+          })),
         );
       }
     }

@@ -15,6 +15,7 @@ export interface Profile {
 export interface Fighter {
   profile_id: string;
   daily_calorie_target: number;
+  dietary_restrictions: string[];
   created_at: string;
 }
 
@@ -85,6 +86,11 @@ export interface MealPlanItem {
   day_of_week: number;
   meal_group: MealGroup;
   description: string;
+  name: string | null;
+  calories: number | null;
+  protein_g: number | null;
+  carbs_g: number | null;
+  fat_g: number | null;
 }
 
 export interface Gala {

@@ -7,6 +7,7 @@ import { usePagination } from '../hooks/usePagination';
 import { PaginationControls } from '../components/PaginationControls';
 import { MEAL_GROUPS, MEAL_GROUP_META } from '../lib/trainingTypes';
 import { MealPlanEditorModal } from '../components/MealPlanEditorModal';
+import { DIETARY_RESTRICTIONS } from '../lib/dietaryRestrictions';
 import { todayISO } from '../lib/date';
 import type { MealEntry, MealGroup, MealPlan } from '../types/database';
 
@@ -22,27 +23,54 @@ function AddFoodForm({ onSubmit, onCancel }: { onSubmit: (v: { name: string; cal
   const [protein, setProtein] = useState('');
   const [carbs, setCarbs] = useState('');
   const [fat, setFat] = useState('');
+  const [estimating, setEstimating] = useState(false);
+  const [estimateError, setEstimateError] = useState<string | null>(null);
 
   const submit = () => {
     if (!name.trim() || !calories) return;
     onSubmit({ name: name.trim(), calories: parseInt(calories, 10) || 0, protein_g: parseFloat(protein) || 0, carbs_g: parseFloat(carbs) || 0, fat_g: parseFloat(fat) || 0 });
   };
 
+  const estimate = async () => {
+    if (!name.trim()) return;
+    setEstimating(true);
+    setEstimateError(null);
+    const { data, error } = await supabase.functions.invoke('estimate-nutrition', { body: { items: [{ id: 'x', description: name.trim() }] } });
+    setEstimating(false);
+    if (error || data?.error) {
+      setEstimateError(data?.error ?? error?.message ?? 'Could not estimate.');
+      return;
+    }
+    const r = data.results?.[0];
+    if (r) {
+      setCalories(String(r.calories));
+      setProtein(String(r.protein_g));
+      setCarbs(String(r.carbs_g));
+      setFat(String(r.fat_g));
+    }
+  };
+
   return (
-    <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
-      <input className="input" style={{ flex: '1 1 140px' }} placeholder="Food name" value={name} onChange={(e) => setName(e.target.value)} />
-      <input className="input" style={{ width: 80 }} type="number" placeholder="kcal" value={calories} onChange={(e) => setCalories(e.target.value)} />
-      <input className="input" style={{ width: 70 }} type="number" placeholder="P g" value={protein} onChange={(e) => setProtein(e.target.value)} />
-      <input className="input" style={{ width: 70 }} type="number" placeholder="C g" value={carbs} onChange={(e) => setCarbs(e.target.value)} />
-      <input className="input" style={{ width: 70 }} type="number" placeholder="F g" value={fat} onChange={(e) => setFat(e.target.value)} />
-      <button className="btn-primary" style={{ padding: '8px 14px', fontSize: 12 }} onClick={submit}>Add</button>
-      <button className="btn-secondary" style={{ padding: '8px 14px', fontSize: 12 }} onClick={onCancel}>Cancel</button>
+    <div style={{ marginTop: 10 }}>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        <input className="input" style={{ flex: '1 1 140px' }} placeholder="Food name" value={name} onChange={(e) => setName(e.target.value)} />
+        <input className="input" style={{ width: 80 }} type="number" placeholder="kcal" value={calories} onChange={(e) => setCalories(e.target.value)} />
+        <input className="input" style={{ width: 70 }} type="number" placeholder="P g" value={protein} onChange={(e) => setProtein(e.target.value)} />
+        <input className="input" style={{ width: 70 }} type="number" placeholder="C g" value={carbs} onChange={(e) => setCarbs(e.target.value)} />
+        <input className="input" style={{ width: 70 }} type="number" placeholder="F g" value={fat} onChange={(e) => setFat(e.target.value)} />
+        <button className="btn-secondary" style={{ padding: '8px 14px', fontSize: 12 }} onClick={estimate} disabled={estimating || !name.trim()}>
+          {estimating ? '…' : 'Estimate with AI'}
+        </button>
+        <button className="btn-primary" style={{ padding: '8px 14px', fontSize: 12 }} onClick={submit}>Add</button>
+        <button className="btn-secondary" style={{ padding: '8px 14px', fontSize: 12 }} onClick={onCancel}>Cancel</button>
+      </div>
+      {estimateError && <div className="error-text" style={{ marginTop: 6 }}>{estimateError}</div>}
     </div>
   );
 }
 
 export function NutritionPage() {
-  const { fighter, profile } = useAuth();
+  const { fighter, profile, refreshFighter } = useAuth();
   const { directory } = useProfileDirectory();
   const [tab, setTab] = useState<'today' | 'plan' | 'all' | 'history'>('today');
   const [entries, setEntries] = useState<MealEntry[]>([]);
@@ -118,6 +146,13 @@ export function NutritionPage() {
     await load();
   };
 
+  const toggleRestriction = async (value: string) => {
+    const current = fighter.dietary_restrictions ?? [];
+    const next = current.includes(value) ? current.filter((r) => r !== value) : [...current, value];
+    await supabase.from('fighters').update({ dietary_restrictions: next }).eq('profile_id', fighter.profile_id);
+    await refreshFighter();
+  };
+
   const selectedPlan = myPlans.find((p) => p.id === selectedPlanId) ?? allPlans.find((p) => p.id === selectedPlanId) ?? null;
 
   const caloriesConsumed = entries.reduce((a, e) => a + e.calories, 0);
@@ -157,6 +192,22 @@ export function NutritionPage() {
             HISTORY
           </button>
         </div>
+      </div>
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 24 }}>
+        <span style={{ fontSize: 11, color: 'var(--muted-3)', letterSpacing: '0.5px' }}>DIETARY RESTRICTIONS:</span>
+        {DIETARY_RESTRICTIONS.map((r) => {
+          const active = fighter.dietary_restrictions?.includes(r.value);
+          return (
+            <button
+              key={r.value}
+              onClick={() => toggleRestriction(r.value)}
+              style={{ padding: '4px 10px', border: '1px solid var(--border-light)', background: active ? 'var(--accent)' : 'transparent', color: active ? 'oklch(0.98 0 0)' : 'var(--muted-2)', fontSize: 11, borderRadius: 3 }}
+            >
+              {r.label}
+            </button>
+          );
+        })}
       </div>
 
       {tab === 'today' ? (
