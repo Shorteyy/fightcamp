@@ -10,6 +10,7 @@ import { ShareFighterModal } from '../components/ShareFighterModal';
 import { FighterProfileModal } from '../components/FighterProfileModal';
 import { computeStatus, buildMultiWeightChart, filterHistoryByRange, type DateRange } from '../lib/chart';
 import { effectiveDeadline } from '../lib/goals';
+import { sortWeightEntries, PERIOD_LABEL } from '../lib/weight';
 import { todayISO, dayFull } from '../lib/date';
 import type { Fighter, WeightEntry } from '../types/database';
 
@@ -45,9 +46,10 @@ export function FightersPage() {
     setFighters(filtered);
     const ids = filtered.map((f) => f.profile_id);
     if (ids.length > 0) {
-      const { data: entries } = await supabase.from('weight_entries').select('*').in('fighter_id', ids).order('entry_date');
+      const { data: entries } = await supabase.from('weight_entries').select('*').in('fighter_id', ids);
       const map: Record<string, WeightEntry[]> = {};
-      for (const e of entries ?? []) map[e.fighter_id] = [...(map[e.fighter_id] ?? []), e];
+      for (const e of (entries ?? []) as WeightEntry[]) map[e.fighter_id] = [...(map[e.fighter_id] ?? []), e];
+      for (const fid of Object.keys(map)) map[fid] = sortWeightEntries(map[fid]);
       setWeightByFighter(map);
     }
     setLoading(false);
@@ -60,7 +62,7 @@ export function FightersPage() {
   const overviewPagination = usePagination(fighters);
   const allEntriesFlat = fighters
     .flatMap((f) => (weightByFighter[f.profile_id] ?? []).map((e) => ({ ...e, fighterId: f.profile_id })))
-    .sort((a, b) => b.entry_date.localeCompare(a.entry_date));
+    .sort((a, b) => b.entry_date.localeCompare(a.entry_date) || b.created_at.localeCompare(a.created_at));
   const weightsPagination = usePagination(allEntriesFlat);
 
   if (loading || galasLoading || goalsLoading) return <div style={{ color: 'var(--muted-2)' }}>Loading…</div>;
@@ -174,7 +176,10 @@ export function FightersPage() {
           {weightsPagination.pageItems.map((e) => (
             <div key={e.id} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, padding: '8px 0', borderBottom: '1px solid var(--border)', fontSize: 13 }}>
               <div>{directory[e.fighterId]?.name ?? '—'}</div>
-              <div style={{ color: 'var(--muted-2)' }}>{e.entry_date}</div>
+              <div style={{ color: 'var(--muted-2)' }}>
+                {e.entry_date}
+                {e.period && <span style={{ color: 'var(--muted-4)', fontSize: 11 }}> · {PERIOD_LABEL[e.period]}</span>}
+              </div>
               <div style={{ fontWeight: 600 }}>{e.weight_kg} kg</div>
             </div>
           ))}

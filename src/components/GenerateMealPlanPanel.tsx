@@ -48,7 +48,7 @@ export function GenerateMealPlanPanel({ ownerId, onGenerated, onCancel }: Props)
         setDirection('goal');
       }
 
-      const { data: w } = await supabase.from('weight_entries').select('*').eq('fighter_id', ownerId).order('entry_date', { ascending: false }).limit(1);
+      const { data: w } = await supabase.from('weight_entries').select('*').eq('fighter_id', ownerId).order('entry_date', { ascending: false }).order('created_at', { ascending: false }).limit(1);
       const last = (w as WeightEntry[] | null)?.[0];
       if (last) setLatestWeight(last.weight_kg);
 

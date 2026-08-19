@@ -31,11 +31,14 @@ export interface Goal {
   updated_at: string;
 }
 
+export type WeightPeriod = 'morning' | 'evening';
+
 export interface WeightEntry {
   id: string;
   fighter_id: string;
   entry_date: string;
   weight_kg: number;
+  period: WeightPeriod | null;
   created_at: string;
 }
 

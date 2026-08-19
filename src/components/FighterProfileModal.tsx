@@ -4,6 +4,7 @@ import { useAuth } from '../auth/AuthContext';
 import { TRAINING_TYPE_META, TRAINING_TYPES } from '../lib/trainingTypes';
 import { dayFull, todayISO } from '../lib/date';
 import { buildWeightChart } from '../lib/chart';
+import { sortWeightEntries } from '../lib/weight';
 import { effectiveDeadline, linkedGala } from '../lib/goals';
 import { useGalaDirectory } from '../hooks/useGalaDirectory';
 import type { DirectoryEntry } from '../hooks/useProfileDirectory';
@@ -34,7 +35,7 @@ export function FighterProfileModal({ fighter, profile, isCoach, onClose, onChan
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
   useEffect(() => {
-    supabase.from('weight_entries').select('*').eq('fighter_id', fighter.profile_id).order('entry_date').then(({ data }) => setHistory(data ?? []));
+    supabase.from('weight_entries').select('*').eq('fighter_id', fighter.profile_id).then(({ data }) => setHistory(sortWeightEntries((data ?? []) as WeightEntry[])));
 
     supabase.from('goals').select('*').eq('fighter_id', fighter.profile_id).eq('status', 'active').maybeSingle().then(({ data }) => {
       const goal = (data as Goal) ?? null;

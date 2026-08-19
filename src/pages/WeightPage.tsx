@@ -7,8 +7,9 @@ import { usePagination } from '../hooks/usePagination';
 import { PaginationControls } from '../components/PaginationControls';
 import { buildWeightChart, computeStatus } from '../lib/chart';
 import { effectiveDeadline, linkedGala } from '../lib/goals';
+import { sortWeightEntries, PERIOD_LABEL } from '../lib/weight';
 import { todayISO } from '../lib/date';
-import type { Goal, WeightEntry } from '../types/database';
+import type { Goal, WeightEntry, WeightPeriod } from '../types/database';
 
 export function WeightPage() {
   const { fighter, profile } = useAuth();
@@ -19,6 +20,7 @@ export function WeightPage() {
   const [loading, setLoading] = useState(true);
   const [value, setValue] = useState('');
   const [date, setDate] = useState(todayISO());
+  const [period, setPeriod] = useState<WeightPeriod | null>(null);
   const [saving, setSaving] = useState(false);
 
   const [editing, setEditing] = useState(false);
@@ -31,8 +33,8 @@ export function WeightPage() {
   const load = useCallback(async () => {
     if (!fighter) return;
     setLoading(true);
-    const { data } = await supabase.from('weight_entries').select('*').eq('fighter_id', fighter.profile_id).order('entry_date');
-    setHistory(data ?? []);
+    const { data } = await supabase.from('weight_entries').select('*').eq('fighter_id', fighter.profile_id);
+    setHistory(sortWeightEntries((data ?? []) as WeightEntry[]));
 
     const { data: goals } = await supabase.from('goals').select('*').eq('fighter_id', fighter.profile_id).order('created_at', { ascending: false });
     const rows = (goals ?? []) as Goal[];
@@ -113,8 +115,9 @@ export function WeightPage() {
   const submitWeight = async () => {
     if (!value) return;
     setSaving(true);
-    await supabase.from('weight_entries').upsert({ fighter_id: fighter.profile_id, entry_date: date, weight_kg: parseFloat(value) }, { onConflict: 'fighter_id,entry_date' });
+    await supabase.from('weight_entries').insert({ fighter_id: fighter.profile_id, entry_date: date, weight_kg: parseFloat(value), period });
     setValue('');
+    setPeriod(null);
     setSaving(false);
     await load();
   };
@@ -227,6 +230,19 @@ export function WeightPage() {
             <input className="input" type="number" placeholder="kg" value={value} onChange={(e) => setValue(e.target.value)} />
             <input className="input" type="date" value={date} onChange={(e) => setDate(e.target.value)} max={today} />
           </div>
+          <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+            {([null, 'morning', 'evening'] as const).map((p) => (
+              <button
+                key={p ?? 'none'}
+                type="button"
+                onClick={() => setPeriod(p)}
+                className="btn-secondary"
+                style={{ flex: 1, padding: '6px 10px', fontSize: 12, background: period === p ? 'var(--accent)' : 'transparent', color: period === p ? 'oklch(0.98 0 0)' : undefined }}
+              >
+                {p ? PERIOD_LABEL[p] : 'Unspecified'}
+              </button>
+            ))}
+          </div>
           <button className="btn-primary" style={{ width: '100%' }} onClick={submitWeight} disabled={saving || !value}>
             {saving ? 'LOGGING…' : 'LOG WEIGHT'}
           </button>
@@ -235,7 +251,10 @@ export function WeightPage() {
           <div className="label" style={{ fontSize: 16, marginBottom: 14 }}>WEIGHT HISTORY</div>
           {entriesPagination.pageItems.map((e) => (
             <div key={e.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--border)', fontSize: 13 }}>
-              <span style={{ color: 'var(--muted-2)' }}>{e.entry_date}</span>
+              <span style={{ color: 'var(--muted-2)' }}>
+                {e.entry_date}
+                {e.period && <span style={{ color: 'var(--muted-4)', fontSize: 11 }}> · {PERIOD_LABEL[e.period]}</span>}
+              </span>
               <span style={{ fontWeight: 600 }}>{e.weight_kg} kg</span>
             </div>
           ))}

@@ -11,6 +11,7 @@ import { PARTICIPATION_META, GALA_COLOR } from '../lib/galas';
 import { effectiveDeadline } from '../lib/goals';
 import { todayISO, weekStart, weekDates, dayFull } from '../lib/date';
 import { buildWeightChart, computeStatus } from '../lib/chart';
+import { sortWeightEntries } from '../lib/weight';
 import type { Gala, GalaParticipationType, Goal, Training, WeightEntry } from '../types/database';
 
 export function DashboardPage() {
@@ -77,9 +78,8 @@ export function DashboardPage() {
       const { data: hist } = await supabase
         .from('weight_entries')
         .select('*')
-        .eq('fighter_id', fighter.profile_id)
-        .order('entry_date');
-      setWeightHistory(hist ?? []);
+        .eq('fighter_id', fighter.profile_id);
+      setWeightHistory(sortWeightEntries((hist ?? []) as WeightEntry[]));
 
       const { data: goal } = await supabase.from('goals').select('*').eq('fighter_id', fighter.profile_id).eq('status', 'active').maybeSingle();
       setActiveGoal((goal as Goal) ?? null);
