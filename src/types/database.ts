@@ -2,6 +2,7 @@ export type UserRole = 'coach' | 'fighter';
 export type TrainingType = 'kickboxing' | 'running' | 'swimming' | 'strength' | 'recovery';
 export type MealGroup = 'breakfast' | 'lunch' | 'dinner' | 'snack';
 export type GalaParticipationType = 'attending' | 'attending_vip' | 'fighting' | 'cornering';
+export type GoalStatus = 'active' | 'achieved' | 'abandoned';
 
 export interface Profile {
   id: string;
@@ -13,11 +14,20 @@ export interface Profile {
 
 export interface Fighter {
   profile_id: string;
-  goal_weight_kg: number | null;
-  goal_deadline: string | null;
   daily_calorie_target: number;
-  goal_gala_id: string | null;
   created_at: string;
+}
+
+export interface Goal {
+  id: string;
+  fighter_id: string;
+  target_weight_kg: number;
+  deadline: string | null;
+  gala_id: string | null;
+  status: GoalStatus;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface WeightEntry {

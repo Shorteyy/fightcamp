@@ -11,7 +11,7 @@ import { PARTICIPATION_META, GALA_COLOR } from '../lib/galas';
 import { effectiveDeadline } from '../lib/goals';
 import { todayISO, weekStart, weekDates, dayFull } from '../lib/date';
 import { buildWeightChart, computeStatus } from '../lib/chart';
-import type { Gala, GalaParticipationType, Training, WeightEntry } from '../types/database';
+import type { Gala, GalaParticipationType, Goal, Training, WeightEntry } from '../types/database';
 
 export function DashboardPage() {
   const { profile, fighter } = useAuth();
@@ -24,6 +24,7 @@ export function DashboardPage() {
   const [weekTrainingCount, setWeekTrainingCount] = useState(0);
   const [fighterCount, setFighterCount] = useState(0);
   const [weightHistory, setWeightHistory] = useState<WeightEntry[]>([]);
+  const [activeGoal, setActiveGoal] = useState<Goal | null>(null);
   const [caloriesToday, setCaloriesToday] = useState(0);
   const [myGalaParticipation, setMyGalaParticipation] = useState<Record<string, GalaParticipationType>>({});
   const [selectedTrainingId, setSelectedTrainingId] = useState<string | null>(null);
@@ -80,6 +81,9 @@ export function DashboardPage() {
         .order('entry_date');
       setWeightHistory(hist ?? []);
 
+      const { data: goal } = await supabase.from('goals').select('*').eq('fighter_id', fighter.profile_id).eq('status', 'active').maybeSingle();
+      setActiveGoal((goal as Goal) ?? null);
+
       const { data: meals } = await supabase
         .from('meal_entries')
         .select('calories')
@@ -104,13 +108,13 @@ export function DashboardPage() {
 
   if (loading) return <div style={{ color: 'var(--muted-2)' }}>Loading…</div>;
 
-  const deadline = fighter ? effectiveDeadline(fighter, galasById) : null;
-  const hasGoal = fighter && fighter.goal_weight_kg != null && deadline != null;
+  const deadline = activeGoal ? effectiveDeadline(activeGoal, galasById) : null;
+  const hasGoal = activeGoal != null && deadline != null;
   const status = hasGoal && weightHistory.length > 0
-    ? computeStatus(weightHistory.map((h) => ({ date: h.entry_date, weight: h.weight_kg })), fighter!.goal_weight_kg!, deadline!, today)
+    ? computeStatus(weightHistory.map((h) => ({ date: h.entry_date, weight: h.weight_kg })), activeGoal!.target_weight_kg, deadline!, today)
     : null;
   const chart = hasGoal && weightHistory.length > 0
-    ? buildWeightChart(weightHistory.map((h) => ({ date: h.entry_date, weight: h.weight_kg })), fighter!.goal_weight_kg!, deadline!, 400, 140)
+    ? buildWeightChart(weightHistory.map((h) => ({ date: h.entry_date, weight: h.weight_kg })), activeGoal!.target_weight_kg, deadline!, 400, 140)
     : null;
 
   const selectedTraining = todaysTrainings.find((t) => t.id === selectedTrainingId) ?? null;
@@ -196,7 +200,7 @@ export function DashboardPage() {
                 </svg>
                 <div style={{ display: 'flex', gap: 24, marginTop: 8, fontSize: 13, color: 'var(--muted-2)' }}>
                   <div>Current: <strong style={{ color: 'var(--text)' }}>{status!.current} kg</strong></div>
-                  <div>Goal: <strong style={{ color: 'var(--text)' }}>{fighter.goal_weight_kg} kg</strong></div>
+                  <div>Goal: <strong style={{ color: 'var(--text)' }}>{activeGoal!.target_weight_kg} kg</strong></div>
                 </div>
               </>
             ) : (

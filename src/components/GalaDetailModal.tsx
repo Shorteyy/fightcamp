@@ -5,7 +5,7 @@ import { PARTICIPATION_META, PARTICIPATION_TYPES } from '../lib/galas';
 import { dayFull } from '../lib/date';
 import { CreateGalaModal } from './CreateGalaModal';
 import type { DirectoryEntry } from '../hooks/useProfileDirectory';
-import type { Gala, GalaParticipant, GalaParticipationType } from '../types/database';
+import type { Gala, GalaParticipant, GalaParticipationType, Goal } from '../types/database';
 
 interface Props {
   gala: Gala;
@@ -15,18 +15,27 @@ interface Props {
 }
 
 export function GalaDetailModal({ gala, directory, onClose, onGalaChanged }: Props) {
-  const { profile, fighter, refreshFighter } = useAuth();
+  const { profile, fighter } = useAuth();
   const [participants, setParticipants] = useState<GalaParticipant[]>([]);
+  const [activeGoal, setActiveGoal] = useState<Goal | null>(null);
   const [loading, setLoading] = useState(true);
   const [editOpen, setEditOpen] = useState(false);
-  const [goalWeightInput, setGoalWeightInput] = useState(fighter?.goal_weight_kg?.toString() ?? '');
+  const [goalWeightInput, setGoalWeightInput] = useState('');
   const [savingGoal, setSavingGoal] = useState(false);
 
   const load = useCallback(async () => {
     const { data } = await supabase.from('gala_participants').select('*').eq('gala_id', gala.id);
     setParticipants((data ?? []) as GalaParticipant[]);
+
+    if (fighter) {
+      const { data: goal } = await supabase.from('goals').select('*').eq('fighter_id', fighter.profile_id).eq('status', 'active').maybeSingle();
+      const g = (goal as Goal) ?? null;
+      setActiveGoal(g);
+      setGoalWeightInput(g?.target_weight_kg.toString() ?? '');
+    }
+
     setLoading(false);
-  }, [gala.id]);
+  }, [gala.id, fighter]);
 
   useEffect(() => {
     load();
@@ -49,11 +58,15 @@ export function GalaDetailModal({ gala, directory, onClose, onGalaChanged }: Pro
   };
 
   const confirmFightingGoal = async () => {
-    if (!fighter || !goalWeightInput) return;
+    if (!fighter || !profile || !goalWeightInput) return;
     setSavingGoal(true);
-    await supabase.from('fighters').update({ goal_weight_kg: parseFloat(goalWeightInput), goal_gala_id: gala.id }).eq('profile_id', fighter.profile_id);
+    if (activeGoal) {
+      await supabase.from('goals').update({ target_weight_kg: parseFloat(goalWeightInput), gala_id: gala.id, deadline: null }).eq('id', activeGoal.id);
+    } else {
+      await supabase.from('goals').insert({ fighter_id: fighter.profile_id, target_weight_kg: parseFloat(goalWeightInput), gala_id: gala.id, created_by: profile.id });
+    }
     setSavingGoal(false);
-    await refreshFighter();
+    await load();
   };
 
   const grouped: Record<GalaParticipationType, GalaParticipant[]> = { attending: [], attending_vip: [], fighting: [], cornering: [] };
@@ -103,14 +116,14 @@ export function GalaDetailModal({ gala, directory, onClose, onGalaChanged }: Pro
         {myParticipation?.participation_type === 'fighting' && fighter && (
           <div className="card" style={{ padding: 16, marginBottom: 20 }}>
             <div style={{ fontSize: 13, color: 'var(--muted-1)', marginBottom: 10 }}>
-              {fighter.goal_gala_id === gala.id
-                ? `Goal weight confirmed for this fight: ${fighter.goal_weight_kg} kg · deadline is this gala's date.`
+              {activeGoal?.gala_id === gala.id
+                ? `Goal weight confirmed for this fight: ${activeGoal.target_weight_kg} kg · deadline is this gala's date.`
                 : 'Set your goal weight for this fight — the deadline will be this gala\'s date.'}
             </div>
             <div style={{ display: 'flex', gap: 10 }}>
               <input className="input" type="number" placeholder="Goal weight (kg)" value={goalWeightInput} onChange={(e) => setGoalWeightInput(e.target.value)} style={{ width: 160 }} />
               <button className="btn-primary" style={{ padding: '10px 16px' }} onClick={confirmFightingGoal} disabled={savingGoal || !goalWeightInput}>
-                {fighter.goal_gala_id === gala.id ? 'UPDATE' : 'CONFIRM'}
+                {activeGoal?.gala_id === gala.id ? 'UPDATE' : 'CONFIRM'}
               </button>
             </div>
           </div>

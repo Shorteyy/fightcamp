@@ -6,17 +6,21 @@ import { useGalaDirectory } from '../hooks/useGalaDirectory';
 import { buildWeightChart, computeStatus } from '../lib/chart';
 import { effectiveDeadline, linkedGala } from '../lib/goals';
 import { todayISO } from '../lib/date';
-import type { WeightEntry } from '../types/database';
+import type { Goal, WeightEntry } from '../types/database';
 
 export function WeightPage() {
-  const { fighter, refreshFighter } = useAuth();
+  const { fighter, profile } = useAuth();
   const { galasById, loading: galasLoading } = useGalaDirectory();
   const [history, setHistory] = useState<WeightEntry[]>([]);
+  const [activeGoal, setActiveGoal] = useState<Goal | null>(null);
+  const [goalHistory, setGoalHistory] = useState<Goal[]>([]);
   const [loading, setLoading] = useState(true);
   const [value, setValue] = useState('');
   const [date, setDate] = useState(todayISO());
   const [saving, setSaving] = useState(false);
 
+  const [editing, setEditing] = useState(false);
+  const [creatingNew, setCreatingNew] = useState(false);
   const [goalWeight, setGoalWeight] = useState('');
   const [goalDeadline, setGoalDeadline] = useState('');
   const [savingGoal, setSavingGoal] = useState(false);
@@ -27,6 +31,12 @@ export function WeightPage() {
     setLoading(true);
     const { data } = await supabase.from('weight_entries').select('*').eq('fighter_id', fighter.profile_id).order('entry_date');
     setHistory(data ?? []);
+
+    const { data: goals } = await supabase.from('goals').select('*').eq('fighter_id', fighter.profile_id).order('created_at', { ascending: false });
+    const rows = (goals ?? []) as Goal[];
+    setActiveGoal(rows.find((g) => g.status === 'active') ?? null);
+    setGoalHistory(rows.filter((g) => g.status !== 'active'));
+
     setLoading(false);
   }, [fighter]);
 
@@ -34,28 +44,65 @@ export function WeightPage() {
     load();
   }, [load]);
 
-  if (!fighter) return <Navigate to="/dashboard" replace />;
+  if (!fighter || !profile) return <Navigate to="/dashboard" replace />;
   if (loading || galasLoading) return <div style={{ color: 'var(--muted-2)' }}>Loading…</div>;
 
-  const deadline = effectiveDeadline(fighter, galasById);
-  const gala = linkedGala(fighter, galasById);
-  const hasGoal = fighter.goal_weight_kg != null && deadline != null;
   const today = todayISO();
+  const deadline = activeGoal ? effectiveDeadline(activeGoal, galasById) : null;
+  const gala = activeGoal ? linkedGala(activeGoal, galasById) : null;
 
-  const saveGoal = async () => {
+  const startCreate = () => {
+    setGoalWeight('');
+    setGoalDeadline('');
+    setCreatingNew(true);
+    setEditing(false);
+  };
+
+  const startEdit = () => {
+    if (!activeGoal) return;
+    setGoalWeight(activeGoal.target_weight_kg.toString());
+    setGoalDeadline(activeGoal.deadline ?? '');
+    setEditing(true);
+    setCreatingNew(false);
+  };
+
+  const createGoal = async () => {
     if (!goalWeight || !goalDeadline) return;
     setSavingGoal(true);
-    // A manually-entered deadline always overrides/clears any gala link.
-    await supabase.from('fighters').update({ goal_weight_kg: parseFloat(goalWeight), goal_deadline: goalDeadline, goal_gala_id: null }).eq('profile_id', fighter.profile_id);
+    await supabase.from('goals').insert({ fighter_id: fighter.profile_id, target_weight_kg: parseFloat(goalWeight), deadline: goalDeadline, created_by: profile.id });
     setSavingGoal(false);
-    await refreshFighter();
+    setCreatingNew(false);
+    await load();
+  };
+
+  const saveEdit = async () => {
+    if (!activeGoal || !goalWeight) return;
+    setSavingGoal(true);
+    // Editing a manual deadline always clears any gala link — you're overriding it with a custom one.
+    await supabase.from('goals').update({ target_weight_kg: parseFloat(goalWeight), deadline: goalDeadline || null, gala_id: null }).eq('id', activeGoal.id);
+    setSavingGoal(false);
+    setEditing(false);
+    await load();
   };
 
   const unlinkFromGala = async () => {
+    if (!activeGoal) return;
     setUnlinking(true);
-    await supabase.from('fighters').update({ goal_gala_id: null }).eq('profile_id', fighter.profile_id);
+    await supabase.from('goals').update({ gala_id: null }).eq('id', activeGoal.id);
     setUnlinking(false);
-    await refreshFighter();
+    await load();
+  };
+
+  const markGoal = async (status: 'achieved' | 'abandoned') => {
+    if (!activeGoal) return;
+    await supabase.from('goals').update({ status }).eq('id', activeGoal.id);
+    await load();
+  };
+
+  const deleteGoal = async (id: string) => {
+    if (!confirm('Delete this goal from your history?')) return;
+    await supabase.from('goals').delete().eq('id', id);
+    await load();
   };
 
   const submitWeight = async () => {
@@ -67,24 +114,47 @@ export function WeightPage() {
     await load();
   };
 
-  if (!hasGoal) {
+  const goalForm = (onSubmit: () => void, submitLabel: string, showCancel: boolean, onCancel: () => void) => (
+    <div className="card" style={{ maxWidth: 420, marginBottom: 24 }}>
+      <div className="label" style={{ fontSize: 16, marginBottom: 16 }}>{submitLabel === 'SAVE GOAL' ? 'SET YOUR GOAL' : submitLabel}</div>
+      <input className="input" style={{ marginBottom: 12 }} type="number" placeholder="Goal weight (kg)" value={goalWeight} onChange={(e) => setGoalWeight(e.target.value)} />
+      <input className="input" style={{ marginBottom: 18 }} type="date" value={goalDeadline} onChange={(e) => setGoalDeadline(e.target.value)} min={today} />
+      <div style={{ display: 'flex', gap: 10 }}>
+        <button className="btn-primary" style={{ flex: 1 }} onClick={onSubmit} disabled={savingGoal || !goalWeight || !goalDeadline}>
+          {savingGoal ? 'SAVING…' : submitLabel}
+        </button>
+        {showCancel && <button className="btn-secondary" onClick={onCancel}>Cancel</button>}
+      </div>
+    </div>
+  );
+
+  if (!activeGoal && !creatingNew) {
     return (
       <div>
         <h1 className="heading" style={{ fontSize: 44, margin: '0 0 24px 0' }}>WEIGHT &amp; GOALS</h1>
-        <div className="card" style={{ maxWidth: 420 }}>
-          <div className="label" style={{ fontSize: 16, marginBottom: 16 }}>SET YOUR GOAL</div>
-          <input className="input" style={{ marginBottom: 12 }} type="number" placeholder="Goal weight (kg)" value={goalWeight} onChange={(e) => setGoalWeight(e.target.value)} />
-          <input className="input" style={{ marginBottom: 18 }} type="date" value={goalDeadline} onChange={(e) => setGoalDeadline(e.target.value)} min={today} />
-          <button className="btn-primary" style={{ width: '100%' }} onClick={saveGoal} disabled={savingGoal || !goalWeight || !goalDeadline}>
-            {savingGoal ? 'SAVING…' : 'SAVE GOAL'}
-          </button>
-        </div>
+        {goalForm(createGoal, 'SAVE GOAL', false, () => {})}
+        {goalHistory.length > 0 && (
+          <GoalHistoryList goals={goalHistory} galasById={galasById} onDelete={deleteGoal} />
+        )}
       </div>
     );
   }
 
-  const status = history.length > 0 ? computeStatus(history.map((h) => ({ date: h.entry_date, weight: h.weight_kg })), fighter.goal_weight_kg!, deadline!, today) : null;
-  const chart = history.length > 0 ? buildWeightChart(history.map((h) => ({ date: h.entry_date, weight: h.weight_kg })), fighter.goal_weight_kg!, deadline!, 760, 300) : null;
+  if (creatingNew) {
+    return (
+      <div>
+        <h1 className="heading" style={{ fontSize: 44, margin: '0 0 24px 0' }}>WEIGHT &amp; GOALS</h1>
+        {goalForm(createGoal, 'START NEW GOAL', true, () => setCreatingNew(false))}
+      </div>
+    );
+  }
+
+  const status = activeGoal && deadline && history.length > 0
+    ? computeStatus(history.map((h) => ({ date: h.entry_date, weight: h.weight_kg })), activeGoal.target_weight_kg, deadline, today)
+    : null;
+  const chart = activeGoal && deadline && history.length > 0
+    ? buildWeightChart(history.map((h) => ({ date: h.entry_date, weight: h.weight_kg })), activeGoal.target_weight_kg, deadline, 760, 300)
+    : null;
   const recentEntries = [...history].reverse().slice(0, 6);
 
   return (
@@ -102,12 +172,21 @@ export function WeightPage() {
         </div>
       )}
 
-      {status && (
-        <div className="card" style={{ borderLeft: `4px solid ${status.color}`, marginBottom: 24, display: 'flex', gap: 36, flexWrap: 'wrap', alignItems: 'center' }}>
-          <div className="heading" style={{ fontSize: 24, color: status.color }}>{status.status.toUpperCase()}</div>
-          <div style={{ fontSize: 13, color: 'var(--muted-2)' }}>{Math.abs(status.kgRemaining)} kg remaining</div>
-          <div style={{ fontSize: 13, color: 'var(--muted-2)' }}>{status.daysLeft} days left</div>
-        </div>
+      {editing ? (
+        goalForm(saveEdit, 'SAVE CHANGES', true, () => setEditing(false))
+      ) : (
+        status && (
+          <div className="card" style={{ borderLeft: `4px solid ${status.color}`, marginBottom: 24, display: 'flex', gap: 24, flexWrap: 'wrap', alignItems: 'center' }}>
+            <div className="heading" style={{ fontSize: 24, color: status.color }}>{status.status.toUpperCase()}</div>
+            <div style={{ fontSize: 13, color: 'var(--muted-2)' }}>{Math.abs(status.kgRemaining)} kg remaining</div>
+            <div style={{ fontSize: 13, color: 'var(--muted-2)' }}>{status.daysLeft} days left</div>
+            <div style={{ display: 'flex', gap: 8, marginLeft: 'auto' }}>
+              <button className="btn-secondary" style={{ padding: '6px 10px', fontSize: 11 }} onClick={startEdit}>Edit</button>
+              <button className="btn-secondary" style={{ padding: '6px 10px', fontSize: 11 }} onClick={startCreate}>Start new goal</button>
+              <button className="btn-secondary" style={{ padding: '6px 10px', fontSize: 11 }} onClick={() => markGoal('achieved')}>Mark achieved</button>
+            </div>
+          </div>
+        )
       )}
 
       <div className="card" style={{ marginBottom: 24 }}>
@@ -125,7 +204,7 @@ export function WeightPage() {
         )}
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.3fr', gap: 20 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.3fr', gap: 20, marginBottom: 24 }}>
         <div className="card" style={{ padding: 22 }}>
           <div className="label" style={{ fontSize: 16, marginBottom: 16 }}>LOG WEIGHT</div>
           <div style={{ display: 'flex', gap: 10, marginBottom: 12 }}>
@@ -147,6 +226,32 @@ export function WeightPage() {
           {recentEntries.length === 0 && <div style={{ fontSize: 12, color: 'var(--muted-4)' }}>No entries yet.</div>}
         </div>
       </div>
+
+      {goalHistory.length > 0 && <GoalHistoryList goals={goalHistory} galasById={galasById} onDelete={deleteGoal} />}
+    </div>
+  );
+}
+
+function GoalHistoryList({ goals, galasById, onDelete }: { goals: Goal[]; galasById: Parameters<typeof effectiveDeadline>[1]; onDelete: (id: string) => void }) {
+  return (
+    <div className="card" style={{ padding: 22 }}>
+      <div className="label" style={{ fontSize: 16, marginBottom: 14 }}>GOAL HISTORY</div>
+      {goals.map((g) => {
+        const gDeadline = effectiveDeadline(g, galasById);
+        const gGala = linkedGala(g, galasById);
+        return (
+          <div key={g.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid var(--border)', fontSize: 13 }}>
+            <div>
+              <strong>{g.target_weight_kg} kg</strong>
+              <span style={{ color: 'var(--muted-2)' }}> by {gDeadline ?? '—'}{gGala ? ` (${gGala.name})` : ''}</span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <span style={{ fontSize: 11, color: g.status === 'achieved' ? 'oklch(0.68 0.15 145)' : 'var(--muted-3)', letterSpacing: '0.5px' }}>{g.status.toUpperCase()}</span>
+              <button onClick={() => onDelete(g.id)} className="btn-secondary" style={{ padding: '4px 8px', fontSize: 11 }}>Delete</button>
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }

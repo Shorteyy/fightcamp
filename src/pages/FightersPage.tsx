@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../auth/AuthContext';
 import { useProfileDirectory } from '../hooks/useProfileDirectory';
 import { useGalaDirectory } from '../hooks/useGalaDirectory';
+import { useActiveGoals } from '../hooks/useActiveGoals';
 import { ShareFighterModal } from '../components/ShareFighterModal';
 import { FighterProfileModal } from '../components/FighterProfileModal';
 import { computeStatus } from '../lib/chart';
@@ -15,6 +16,7 @@ export function FightersPage() {
   const { profile } = useAuth();
   const { directory } = useProfileDirectory();
   const { galasById, loading: galasLoading } = useGalaDirectory();
+  const { goalsByFighter, loading: goalsLoading, refresh: refreshGoals } = useActiveGoals();
   const [fighters, setFighters] = useState<Fighter[]>([]);
   const [weightByFighter, setWeightByFighter] = useState<Record<string, WeightEntry[]>>({});
   const [shareOpen, setShareOpen] = useState(false);
@@ -45,7 +47,7 @@ export function FightersPage() {
   }, [load]);
 
   if (profile && profile.role !== 'coach') return <Navigate to="/dashboard" replace />;
-  if (loading || galasLoading) return <div style={{ color: 'var(--muted-2)' }}>Loading…</div>;
+  if (loading || galasLoading || goalsLoading) return <div style={{ color: 'var(--muted-2)' }}>Loading…</div>;
 
   const today = todayISO();
   const selected = fighters.find((f) => f.profile_id === selectedId) ?? null;
@@ -57,11 +59,12 @@ export function FightersPage() {
         {fighters.map((f) => {
           const d = directory[f.profile_id];
           const hist = weightByFighter[f.profile_id] ?? [];
-          const deadline = effectiveDeadline(f, galasById);
-          const hasGoal = f.goal_weight_kg != null && deadline != null;
-          const status = hasGoal && hist.length > 0 ? computeStatus(hist.map((h) => ({ date: h.entry_date, weight: h.weight_kg })), f.goal_weight_kg!, deadline!, today) : null;
+          const goal = goalsByFighter[f.profile_id] ?? null;
+          const deadline = goal ? effectiveDeadline(goal, galasById) : null;
+          const hasGoal = goal != null && deadline != null;
+          const status = hasGoal && hist.length > 0 ? computeStatus(hist.map((h) => ({ date: h.entry_date, weight: h.weight_kg })), goal!.target_weight_kg, deadline!, today) : null;
           const first = hist[0]?.weight_kg;
-          const range = status && first != null ? first - f.goal_weight_kg! : 0;
+          const range = status && first != null && goal ? first - goal.target_weight_kg : 0;
           const pct = status && range > 0 ? Math.min(100, Math.max(0, ((first! - status.current) / range) * 100)) : 0;
 
           return (
@@ -78,7 +81,7 @@ export function FightersPage() {
                 </div>
               </div>
               <div style={{ fontSize: 12, color: 'var(--muted-2)', marginBottom: 4 }}>
-                Current: <strong style={{ color: 'var(--text)' }}>{hist[hist.length - 1]?.weight_kg ?? '—'} kg</strong> · Goal: <strong style={{ color: 'var(--text)' }}>{f.goal_weight_kg ?? '—'} kg</strong>
+                Current: <strong style={{ color: 'var(--text)' }}>{hist[hist.length - 1]?.weight_kg ?? '—'} kg</strong> · Goal: <strong style={{ color: 'var(--text)' }}>{goal?.target_weight_kg ?? '—'} kg</strong>
               </div>
               <div style={{ fontSize: 12, color: 'var(--muted-2)', marginBottom: 10 }}>Deadline: {deadline ?? '—'}</div>
               <div style={{ height: 6, background: 'var(--track)', width: '100%' }}>
@@ -102,7 +105,10 @@ export function FightersPage() {
           profile={directory[selected.profile_id]}
           isCoach={profile?.role === 'coach'}
           onClose={() => setSelectedId(null)}
-          onChanged={load}
+          onChanged={() => {
+            load();
+            refreshGoals();
+          }}
         />
       )}
     </div>
