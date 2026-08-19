@@ -30,6 +30,8 @@ export function FighterProfileModal({ fighter, profile, isCoach, onClose, onChan
   const [saving, setSaving] = useState(false);
   const [roleBusy, setRoleBusy] = useState(false);
   const [roleError, setRoleError] = useState<string | null>(null);
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   useEffect(() => {
     supabase.from('weight_entries').select('*').eq('fighter_id', fighter.profile_id).order('entry_date').then(({ data }) => setHistory(data ?? []));
@@ -88,6 +90,20 @@ export function FighterProfileModal({ fighter, profile, isCoach, onClose, onChan
       return;
     }
     onChanged();
+  };
+
+  const deleteMember = async () => {
+    if (!confirm(`Permanently delete ${profile.name}? Their login, weight history, goals, nutrition log, and meal plans are gone for good. Trainings/galas they created stay (marked "Removed user"). This cannot be undone.`)) return;
+    setDeleteBusy(true);
+    setDeleteError(null);
+    const { data, error } = await supabase.functions.invoke('delete-user', { body: { userId: fighter.profile_id } });
+    setDeleteBusy(false);
+    if (error || data?.error) {
+      setDeleteError(data?.error ?? error?.message ?? 'Could not delete this member.');
+      return;
+    }
+    onChanged();
+    onClose();
   };
 
   const deadline = activeGoal ? effectiveDeadline(activeGoal, galasById) : null;
@@ -192,6 +208,17 @@ export function FighterProfileModal({ fighter, profile, isCoach, onClose, onChan
             </div>
           );
         })}
+
+        {isCoach && (
+          <>
+            <div style={{ borderTop: '1px solid var(--border)', marginTop: 20, paddingTop: 16 }}>
+              {deleteError && <div className="error-text" style={{ marginBottom: 10 }}>{deleteError}</div>}
+              <button className="btn-secondary" style={{ padding: '8px 14px', fontSize: 12, color: 'var(--accent)' }} onClick={deleteMember} disabled={deleteBusy}>
+                {deleteBusy ? 'DELETING…' : 'DELETE MEMBER'}
+              </button>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

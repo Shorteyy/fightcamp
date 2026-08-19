@@ -25,7 +25,7 @@ export interface Goal {
   deadline: string | null;
   gala_id: string | null;
   status: GoalStatus;
-  created_by: string;
+  created_by: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -46,7 +46,7 @@ export interface Training {
   start_time: string;
   location: string;
   notes: string;
-  created_by: string;
+  created_by: string | null;
   created_at: string;
   cancelled_at: string | null;
 }
@@ -74,7 +74,7 @@ export interface MealPlan {
   id: string;
   name: string;
   owner_id: string;
-  created_by: string;
+  created_by: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -94,7 +94,7 @@ export interface Gala {
   location: string;
   notes: string;
   poster_url: string | null;
-  created_by: string;
+  created_by: string | null;
   created_at: string;
 }
 
