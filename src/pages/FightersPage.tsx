@@ -20,9 +20,14 @@ export function FightersPage() {
 
   const load = useCallback(async () => {
     setLoading(true);
+    // Every profile has a fighters row now (coaches included), but this roster is
+    // specifically "who I coach" — so it excludes coach profiles, including your own.
+    const { data: fighterProfiles } = await supabase.from('profiles').select('id').eq('role', 'fighter');
+    const fighterProfileIds = new Set((fighterProfiles ?? []).map((p) => p.id));
     const { data: fRows } = await supabase.from('fighters').select('*');
-    setFighters(fRows ?? []);
-    const ids = (fRows ?? []).map((f) => f.profile_id);
+    const filtered = (fRows ?? []).filter((f) => fighterProfileIds.has(f.profile_id));
+    setFighters(filtered);
+    const ids = filtered.map((f) => f.profile_id);
     if (ids.length > 0) {
       const { data: entries } = await supabase.from('weight_entries').select('*').in('fighter_id', ids).order('entry_date');
       const map: Record<string, WeightEntry[]> = {};

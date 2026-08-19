@@ -61,7 +61,7 @@ export function DashboardPage() {
     }
 
     if (profile?.role === 'coach') {
-      const { count } = await supabase.from('fighters').select('*', { count: 'exact', head: true });
+      const { count } = await supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('role', 'fighter');
       setFighterCount(count ?? 0);
     }
 
@@ -172,7 +172,7 @@ export function DashboardPage() {
             <div className="heading" style={{ fontSize: 32 }}>{weekTrainingCount}</div>
             <div style={{ fontSize: 12, color: 'var(--muted-3)', letterSpacing: '0.5px' }}>TRAININGS THIS WEEK</div>
           </div>
-          {fighter ? (
+          {fighter && (
             <>
               <div className="card" style={{ padding: '18px 22px', flex: 1 }}>
                 <div className="heading" style={{ fontSize: 32 }}>{caloriesToday}</div>
@@ -183,7 +183,8 @@ export function DashboardPage() {
                 <div style={{ fontSize: 12, color: 'var(--muted-3)', letterSpacing: '0.5px' }}>DAYS UNTIL GOAL DEADLINE</div>
               </div>
             </>
-          ) : (
+          )}
+          {profile?.role === 'coach' && (
             <div className="card" style={{ padding: '18px 22px', flex: 1 }}>
               <div className="heading" style={{ fontSize: 32 }}>{fighterCount}</div>
               <div style={{ fontSize: 12, color: 'var(--muted-3)', letterSpacing: '0.5px' }}>FIGHTERS ON ROSTER</div>
