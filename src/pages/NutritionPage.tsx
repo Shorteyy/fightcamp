@@ -8,9 +8,10 @@ import { PaginationControls } from '../components/PaginationControls';
 import { MEAL_GROUPS, MEAL_GROUP_META } from '../lib/trainingTypes';
 import { MealPlanEditorModal } from '../components/MealPlanEditorModal';
 import { LogFromPlanModal } from '../components/LogFromPlanModal';
+import { NutritionHistoryPanel } from '../components/NutritionHistoryPanel';
 import { DIETARY_RESTRICTIONS, dietaryRestrictionLabel } from '../lib/dietaryRestrictions';
 import { todayISO, dayOfWeekIndex } from '../lib/date';
-import type { MealEntry, MealGroup, MealPlan, MealPlanItem } from '../types/database';
+import type { Fighter, MealEntry, MealGroup, MealPlan, MealPlanItem } from '../types/database';
 
 const MACRO_TARGETS = [
   { key: 'protein_g' as const, label: 'Protein', target: 180, color: 'oklch(0.58 0.2 25)' },
@@ -73,19 +74,20 @@ function AddFoodForm({ onSubmit, onCancel }: { onSubmit: (v: { name: string; cal
 export function NutritionPage() {
   const { fighter, profile, refreshFighter } = useAuth();
   const { directory } = useProfileDirectory();
-  const [tab, setTab] = useState<'today' | 'plan' | 'all' | 'history'>('today');
+  const [tab, setTab] = useState<'today' | 'plan' | 'all' | 'history' | 'followers'>('today');
   const [entries, setEntries] = useState<MealEntry[]>([]);
-  const [allEntries, setAllEntries] = useState<MealEntry[]>([]);
   const [openForm, setOpenForm] = useState<MealGroup | null>(null);
   const [myPlans, setMyPlans] = useState<MealPlan[]>([]);
   const [allPlans, setAllPlans] = useState<MealPlan[]>([]);
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
-  const [selectedHistoryDate, setSelectedHistoryDate] = useState<string | null>(null);
   const [myTagFilter, setMyTagFilter] = useState<string[]>([]);
   const [allTagFilter, setAllTagFilter] = useState<string[]>([]);
   const [tagFilterSeeded, setTagFilterSeeded] = useState(false);
   const [followingItems, setFollowingItems] = useState<MealPlanItem[]>([]);
   const [logFromPlanOpen, setLogFromPlanOpen] = useState(false);
+  const [followerPlans, setFollowerPlans] = useState<MealPlan[]>([]);
+  const [fightersById, setFightersById] = useState<Record<string, Fighter>>({});
+  const [selectedFollowerId, setSelectedFollowerId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   const today = todayISO();
@@ -96,9 +98,6 @@ export function NutritionPage() {
     setLoading(true);
     const { data } = await supabase.from('meal_entries').select('*').eq('fighter_id', fighter.profile_id).eq('entry_date', today);
     setEntries(data ?? []);
-
-    const { data: allForFighter } = await supabase.from('meal_entries').select('*').eq('fighter_id', fighter.profile_id).order('entry_date', { ascending: false });
-    setAllEntries((allForFighter ?? []) as MealEntry[]);
 
     const { data: plans } = await supabase.from('meal_plans').select('*').eq('owner_id', profile.id).order('updated_at', { ascending: false });
     const myPlanRows = (plans ?? []) as MealPlan[];
@@ -113,6 +112,13 @@ export function NutritionPage() {
       setFollowingItems((fItems ?? []) as MealPlanItem[]);
     } else {
       setFollowingItems([]);
+    }
+
+    if (profile.role === 'coach') {
+      const { data: fp } = await supabase.from('meal_plans').select('*').eq('is_following', true);
+      setFollowerPlans((fp ?? []) as MealPlan[]);
+      const { data: allFighters } = await supabase.from('fighters').select('*');
+      setFightersById(Object.fromEntries(((allFighters ?? []) as Fighter[]).map((f) => [f.profile_id, f])));
     }
 
     setLoading(false);
@@ -143,18 +149,7 @@ export function NutritionPage() {
   const myPlansPagination = usePagination(filteredMyPlans);
   const allPlansPagination = usePagination(filteredAllPlans);
 
-  const dailyTotals = Array.from(new Set(allEntries.map((e) => e.entry_date))).map((date) => {
-    const dayEntries = allEntries.filter((e) => e.entry_date === date);
-    return {
-      date,
-      calories: dayEntries.reduce((a, e) => a + e.calories, 0),
-      protein: dayEntries.reduce((a, e) => a + e.protein_g, 0),
-      carbs: dayEntries.reduce((a, e) => a + e.carbs_g, 0),
-      fat: dayEntries.reduce((a, e) => a + e.fat_g, 0),
-    };
-  });
-  const historyPagination = usePagination(dailyTotals);
-  const selectedHistoryEntries = selectedHistoryDate ? allEntries.filter((e) => e.entry_date === selectedHistoryDate) : [];
+  const followersPagination = usePagination(followerPlans);
 
   if (!fighter || !profile) return <Navigate to="/dashboard" replace />;
   if (loading) return <div style={{ color: 'var(--muted-2)' }}>Loading…</div>;
@@ -250,6 +245,14 @@ export function NutritionPage() {
           >
             HISTORY
           </button>
+          {isCoach && (
+            <button
+              onClick={() => setTab('followers')}
+              style={{ padding: '10px 18px', border: 'none', fontFamily: "'Bebas Neue', sans-serif", letterSpacing: 1, fontSize: 13, background: tab === 'followers' ? 'var(--accent)' : 'transparent', color: tab === 'followers' ? 'oklch(0.98 0 0)' : 'oklch(0.65 0.01 40)' }}
+            >
+              FOLLOWERS
+            </button>
+          )}
         </div>
       </div>
 
@@ -408,55 +411,37 @@ export function NutritionPage() {
           </div>
           <PaginationControls page={allPlansPagination.page} totalPages={allPlansPagination.totalPages} onChange={allPlansPagination.setPage} />
         </>
+      ) : tab === 'history' ? (
+        <NutritionHistoryPanel fighterId={fighter.profile_id} dailyCalorieTarget={fighter.daily_calorie_target} />
       ) : (
         <div className="card" style={{ padding: 22 }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.4fr 1fr 1fr 1fr', gap: 8, fontSize: 11, color: 'var(--muted-3)', letterSpacing: '0.5px', paddingBottom: 8, borderBottom: '1px solid var(--border)', marginBottom: 4 }}>
-            <div>DATE</div>
-            <div>CALORIES</div>
-            <div>PROTEIN</div>
-            <div>CARBS</div>
-            <div>FAT</div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, fontSize: 11, color: 'var(--muted-3)', letterSpacing: '0.5px', paddingBottom: 8, borderBottom: '1px solid var(--border)', marginBottom: 4 }}>
+            <div>FOLLOWER</div>
+            <div>PLAN</div>
           </div>
-          {historyPagination.pageItems.map((d) => (
+          {followersPagination.pageItems.map((p) => (
             <div
-              key={d.date}
-              onClick={() => setSelectedHistoryDate(d.date)}
-              style={{ display: 'grid', gridTemplateColumns: '1fr 1.4fr 1fr 1fr 1fr', gap: 8, padding: '8px 0', borderBottom: '1px solid var(--border)', fontSize: 13, cursor: 'pointer' }}
+              key={p.id}
+              onClick={() => setSelectedFollowerId(p.owner_id)}
+              style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, padding: '8px 0', borderBottom: '1px solid var(--border)', fontSize: 13, cursor: 'pointer' }}
             >
-              <div>{d.date}</div>
-              <div style={{ fontWeight: 600 }}>{d.calories} / {fighter.daily_calorie_target} kcal</div>
-              <div style={{ color: 'var(--muted-2)' }}>{d.protein}g / {MACRO_TARGETS[0].target}g</div>
-              <div style={{ color: 'var(--muted-2)' }}>{d.carbs}g / {MACRO_TARGETS[1].target}g</div>
-              <div style={{ color: 'var(--muted-2)' }}>{d.fat}g / {MACRO_TARGETS[2].target}g</div>
+              <div>{directory[p.owner_id]?.name ?? '—'}</div>
+              <div style={{ color: 'var(--muted-2)' }}>{p.name}</div>
             </div>
           ))}
-          {dailyTotals.length === 0 && <div style={{ fontSize: 12, color: 'var(--muted-4)', padding: '8px 0' }}>No logged days yet.</div>}
-          <PaginationControls page={historyPagination.page} totalPages={historyPagination.totalPages} onChange={historyPagination.setPage} />
+          {followerPlans.length === 0 && <div style={{ fontSize: 12, color: 'var(--muted-4)', padding: '8px 0' }}>No one is following a plan yet.</div>}
+          <PaginationControls page={followersPagination.page} totalPages={followersPagination.totalPages} onChange={followersPagination.setPage} />
         </div>
       )}
 
-      {selectedHistoryDate && (
-        <div className="modal-backdrop" onClick={() => setSelectedHistoryDate(null)}>
-          <div className="modal-panel" onClick={(e) => e.stopPropagation()}>
+      {selectedFollowerId && (
+        <div className="modal-backdrop" onClick={() => setSelectedFollowerId(null)}>
+          <div className="modal-panel" style={{ width: 640 }} onClick={(e) => e.stopPropagation()}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-              <div className="heading" style={{ fontSize: 22 }}>{selectedHistoryDate}</div>
-              <button onClick={() => setSelectedHistoryDate(null)} style={{ background: 'transparent', border: 'none', color: 'var(--muted-2)', fontSize: 20 }}>✕</button>
+              <div className="heading" style={{ fontSize: 22 }}>{directory[selectedFollowerId]?.name ?? '—'}'S LOG</div>
+              <button onClick={() => setSelectedFollowerId(null)} style={{ background: 'transparent', border: 'none', color: 'var(--muted-2)', fontSize: 20 }}>✕</button>
             </div>
-            {MEAL_GROUPS.map((group) => {
-              const items = selectedHistoryEntries.filter((e) => e.meal_group === group);
-              return (
-                <div key={group} style={{ marginBottom: 14 }}>
-                  <div className="label" style={{ fontSize: 14, marginBottom: 8 }}>{MEAL_GROUP_META[group].label}</div>
-                  {items.map((it) => (
-                    <div key={it.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid var(--border)', fontSize: 13 }}>
-                      <span>{it.name}</span>
-                      <span style={{ color: 'var(--muted-2)' }}>{it.calories} kcal</span>
-                    </div>
-                  ))}
-                  {items.length === 0 && <div style={{ fontSize: 12, color: 'var(--muted-4)' }}>Nothing logged.</div>}
-                </div>
-              );
-            })}
+            <NutritionHistoryPanel fighterId={selectedFollowerId} dailyCalorieTarget={fightersById[selectedFollowerId]?.daily_calorie_target ?? 2400} />
           </div>
         </div>
       )}
