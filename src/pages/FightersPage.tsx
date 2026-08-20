@@ -10,7 +10,8 @@ import { ShareFighterModal } from '../components/ShareFighterModal';
 import { FighterProfileModal } from '../components/FighterProfileModal';
 import { computeStatus, buildMultiWeightChart, filterHistoryByRange, type DateRange } from '../lib/chart';
 import { effectiveDeadline } from '../lib/goals';
-import { sortWeightEntries, PERIOD_LABEL } from '../lib/weight';
+import { sortWeightEntries } from '../lib/weight';
+import { WeightEntryRow } from '../components/WeightEntryRow';
 import { todayISO, dayFull } from '../lib/date';
 import type { Fighter, WeightEntry } from '../types/database';
 
@@ -168,20 +169,13 @@ export function FightersPage() {
 
       {tab === 'weights' && (
         <div className="card" style={{ padding: 22 }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, fontSize: 11, color: 'var(--muted-3)', letterSpacing: '0.5px', paddingBottom: 8, borderBottom: '1px solid var(--border)', marginBottom: 4 }}>
-            <div>FIGHTER</div>
-            <div>DATE</div>
-            <div>WEIGHT</div>
+          <div style={{ display: 'flex', gap: 8, fontSize: 11, color: 'var(--muted-3)', letterSpacing: '0.5px', paddingBottom: 8, borderBottom: '1px solid var(--border)', marginBottom: 4 }}>
+            <div style={{ flex: '1 1 100px' }}>FIGHTER</div>
+            <div style={{ flex: '1 1 130px' }}>DATE</div>
+            <div style={{ flex: '1 1 70px' }}>WEIGHT</div>
           </div>
           {weightsPagination.pageItems.map((e) => (
-            <div key={e.id} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, padding: '8px 0', borderBottom: '1px solid var(--border)', fontSize: 13 }}>
-              <div>{directory[e.fighterId]?.name ?? '—'}</div>
-              <div style={{ color: 'var(--muted-2)' }}>
-                {e.entry_date}
-                {e.period && <span style={{ color: 'var(--muted-4)', fontSize: 11 }}> · {PERIOD_LABEL[e.period]}</span>}
-              </div>
-              <div style={{ fontWeight: 600 }}>{e.weight_kg} kg</div>
-            </div>
+            <WeightEntryRow key={e.id} entry={e} fighterName={directory[e.fighterId]?.name ?? '—'} canManage={isCoach || e.fighterId === profile?.id} onSaved={load} />
           ))}
           {allEntriesFlat.length === 0 && <div style={{ fontSize: 12, color: 'var(--muted-4)', padding: '8px 0' }}>No weight entries yet.</div>}
           <PaginationControls page={weightsPagination.page} totalPages={weightsPagination.totalPages} onChange={weightsPagination.setPage} />

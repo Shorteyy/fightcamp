@@ -8,6 +8,7 @@ import { PaginationControls } from '../components/PaginationControls';
 import { buildWeightChart, computeStatus } from '../lib/chart';
 import { effectiveDeadline, linkedGala } from '../lib/goals';
 import { sortWeightEntries, PERIOD_LABEL } from '../lib/weight';
+import { WeightEntryRow } from '../components/WeightEntryRow';
 import { todayISO } from '../lib/date';
 import type { Goal, WeightEntry, WeightPeriod } from '../types/database';
 
@@ -250,13 +251,7 @@ export function WeightPage() {
         <div className="card" style={{ padding: 22 }}>
           <div className="label" style={{ fontSize: 16, marginBottom: 14 }}>WEIGHT HISTORY</div>
           {entriesPagination.pageItems.map((e) => (
-            <div key={e.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--border)', fontSize: 13 }}>
-              <span style={{ color: 'var(--muted-2)' }}>
-                {e.entry_date}
-                {e.period && <span style={{ color: 'var(--muted-4)', fontSize: 11 }}> · {PERIOD_LABEL[e.period]}</span>}
-              </span>
-              <span style={{ fontWeight: 600 }}>{e.weight_kg} kg</span>
-            </div>
+            <WeightEntryRow key={e.id} entry={e} canManage onSaved={load} />
           ))}
           {reversedHistory.length === 0 && <div style={{ fontSize: 12, color: 'var(--muted-4)' }}>No entries yet.</div>}
           <PaginationControls page={entriesPagination.page} totalPages={entriesPagination.totalPages} onChange={entriesPagination.setPage} />
