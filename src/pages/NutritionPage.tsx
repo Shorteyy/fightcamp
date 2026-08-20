@@ -400,9 +400,18 @@ export function NutritionPage() {
                       ✕
                     </button>
                   )}
-                  <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 6 }}>{p.name}</div>
+                  <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 6, paddingRight: canDelete ? 20 : 0 }}>{p.name}</div>
                   <div style={{ fontSize: 12, color: 'var(--muted-3)', marginBottom: 6 }}>{directory[p.owner_id]?.name ?? '—'} · Updated {p.updated_at.slice(0, 10)}</div>
                   <PlanTagBadges tags={p.dietary_tags} />
+                  {p.owner_id === profile.id && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); toggleFollowing(p); }}
+                      className="btn-secondary"
+                      style={{ marginTop: 10, padding: '4px 10px', fontSize: 11, background: p.is_following ? 'var(--accent)' : 'transparent', color: p.is_following ? 'oklch(0.98 0 0)' : undefined }}
+                    >
+                      {p.is_following ? 'FOLLOWING' : 'Follow'}
+                    </button>
+                  )}
                 </div>
               );
             })}
