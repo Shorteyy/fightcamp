@@ -44,6 +44,7 @@ export function MealPlanEditorModal({ plan, directory, canAssign, onClose, onSav
   const [shoppingListOpen, setShoppingListOpen] = useState(false);
   const [estimating, setEstimating] = useState(false);
   const [estimateError, setEstimateError] = useState<string | null>(null);
+  const [expandedCell, setExpandedCell] = useState<{ day: number; group: string } | null>(null);
 
   useEffect(() => {
     supabase.from('meal_plan_items').select('*').eq('meal_plan_id', plan.id).then(({ data }) => {
@@ -77,6 +78,11 @@ export function MealPlanEditorModal({ plan, directory, canAssign, onClose, onSav
   const setDescription = (day: number, group: string, value: string) => {
     const key = `${day}:${group}`;
     setCells((c) => ({ ...c, [key]: { ...(c[key] ?? EMPTY_CELL), description: value } }));
+  };
+
+  const setCellName = (day: number, group: string, value: string) => {
+    const key = `${day}:${group}`;
+    setCells((c) => ({ ...c, [key]: { ...(c[key] ?? EMPTY_CELL), name: value || null } }));
   };
 
   const save = async () => {
@@ -198,28 +204,56 @@ export function MealPlanEditorModal({ plan, directory, canAssign, onClose, onSav
         {loading ? (
           <div style={{ color: 'var(--muted-2)', fontSize: 13 }}>Loading…</div>
         ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(200px,1fr))', gap: 14, maxHeight: '50vh', overflowY: 'auto', marginBottom: 16 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(230px,1fr))', gap: 14, maxHeight: '60vh', overflowY: 'auto', marginBottom: 16 }}>
             {DAY_LABELS.map((label, dayIndex) => (
               <div key={label} className="card" style={{ padding: 14 }}>
                 <div className="label" style={{ fontSize: 14, marginBottom: 10 }}>{label}</div>
                 {MEAL_GROUPS.map((group) => {
                   const cell = cells[`${dayIndex}:${group}`] ?? EMPTY_CELL;
+                  const hasOverflow = cell.description.length > 90;
                   return (
-                    <div key={group} style={{ marginBottom: 8 }}>
-                      <strong style={{ color: 'oklch(0.9 0.004 40)', fontSize: 11 }}>{MEAL_GROUP_META[group].label}</strong>
+                    <div key={group} style={{ marginBottom: 10, height: 150, display: 'flex', flexDirection: 'column', border: '1px solid var(--border)', borderRadius: 4, padding: 8 }}>
+                      <strong style={{ color: 'oklch(0.9 0.004 40)', fontSize: 11, marginBottom: 4 }}>{MEAL_GROUP_META[group].label}</strong>
                       {canEdit ? (
-                        <textarea
-                          value={cell.description}
-                          onChange={(e) => setDescription(dayIndex, group, e.target.value)}
-                          placeholder="—"
-                          className="input"
-                          style={{ fontSize: 12, minHeight: 36, resize: 'vertical', marginTop: 4 }}
-                        />
+                        <>
+                          <input
+                            value={cell.name ?? ''}
+                            onChange={(e) => setCellName(dayIndex, group, e.target.value)}
+                            placeholder="Meal name"
+                            className="input"
+                            style={{ fontSize: 12, fontWeight: 600, padding: '4px 6px', marginBottom: 4 }}
+                          />
+                          <textarea
+                            value={cell.description}
+                            onChange={(e) => setDescription(dayIndex, group, e.target.value)}
+                            placeholder="Description"
+                            className="input"
+                            style={{ fontSize: 12, flex: 1, resize: 'none', padding: '4px 6px' }}
+                          />
+                        </>
                       ) : (
-                        <div style={{ fontSize: 12, color: 'var(--muted-2)', marginTop: 4, minHeight: 20 }}>{cell.description || '—'}</div>
+                        <div style={{ flex: 1, overflow: 'hidden' }}>
+                          {cell.name && <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 2 }}>{cell.name}</div>}
+                          <div
+                            style={{
+                              fontSize: 12, color: 'var(--muted-2)', display: '-webkit-box',
+                              WebkitLineClamp: cell.name ? 3 : 4, WebkitBoxOrient: 'vertical', overflow: 'hidden',
+                            }}
+                          >
+                            {cell.description || '—'}
+                          </div>
+                          {hasOverflow && (
+                            <button
+                              onClick={() => setExpandedCell({ day: dayIndex, group })}
+                              style={{ background: 'transparent', border: 'none', color: 'var(--accent)', fontSize: 11, padding: 0, marginTop: 2, cursor: 'pointer' }}
+                            >
+                              Read more
+                            </button>
+                          )}
+                        </div>
                       )}
                       {cell.calories != null && (
-                        <div style={{ fontSize: 10, color: 'var(--muted-3)', marginTop: 3 }}>
+                        <div style={{ fontSize: 10, color: 'var(--muted-3)', marginTop: 4, flexShrink: 0 }}>
                           {cell.calories} kcal · P{cell.protein_g}g C{cell.carbs_g}g F{cell.fat_g}g
                         </div>
                       )}
@@ -261,6 +295,24 @@ export function MealPlanEditorModal({ plan, directory, canAssign, onClose, onSav
 
       {assignOpen && <AssignMealPlanModal plan={plan} directory={directory} onClose={() => setAssignOpen(false)} onAssigned={onSaved} />}
       {shoppingListOpen && <ShoppingListPanel plan={plan} onClose={() => setShoppingListOpen(false)} onSaved={onSaved} />}
+      {expandedCell && (() => {
+        const cell = cells[`${expandedCell.day}:${expandedCell.group}`] ?? EMPTY_CELL;
+        return (
+          <div className="modal-backdrop" onClick={() => setExpandedCell(null)}>
+            <div className="modal-panel" style={{ width: 420 }} onClick={(e) => e.stopPropagation()}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                <div className="heading" style={{ fontSize: 20 }}>{DAY_LABELS[expandedCell.day]} · {MEAL_GROUP_META[expandedCell.group].label}</div>
+                <button onClick={() => setExpandedCell(null)} style={{ background: 'transparent', border: 'none', color: 'var(--muted-2)', fontSize: 20 }}>✕</button>
+              </div>
+              {cell.name && <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 8 }}>{cell.name}</div>}
+              <div style={{ fontSize: 13, color: 'var(--muted-2)', whiteSpace: 'pre-wrap', marginBottom: 12 }}>{cell.description || '—'}</div>
+              {cell.calories != null && (
+                <div style={{ fontSize: 12, color: 'var(--muted-3)' }}>{cell.calories} kcal · P{cell.protein_g}g C{cell.carbs_g}g F{cell.fat_g}g</div>
+              )}
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
