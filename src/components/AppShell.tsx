@@ -1,14 +1,15 @@
 import { NavLink, Outlet } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import { useIsMobile } from '../hooks/useIsMobile';
+import { HouseIcon, CalendarIcon, TicketIcon, PeopleIcon, DumbbellIcon, UtensilsIcon } from './NavIcons';
 
 const NAV_ITEMS = [
-  { to: '/dashboard', label: 'DASHBOARD' },
-  { to: '/calendar', label: 'CALENDAR' },
-  { to: '/galas', label: 'GALAS' },
-  { to: '/fighters', label: 'TEAM' },
-  { to: '/weight', label: 'WEIGHT & GOALS', fighterOnly: true },
-  { to: '/nutrition', label: 'NUTRITION', fighterOnly: true },
+  { to: '/dashboard', label: 'DASHBOARD', Icon: HouseIcon },
+  { to: '/calendar', label: 'CALENDAR', Icon: CalendarIcon },
+  { to: '/galas', label: 'GALAS', Icon: TicketIcon },
+  { to: '/fighters', label: 'TEAM', Icon: PeopleIcon },
+  { to: '/weight', label: 'WEIGHT & GOALS', Icon: DumbbellIcon, fighterOnly: true },
+  { to: '/nutrition', label: 'NUTRITION', Icon: UtensilsIcon, fighterOnly: true },
 ];
 
 export function AppShell() {
@@ -72,8 +73,8 @@ export function AppShell() {
       {isMobile && (
         <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, height: 64, background: 'var(--panel)', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'space-around', alignItems: 'center', zIndex: 150 }}>
           {visibleItems.map((item) => (
-            <NavLink key={item.to} to={item.to} style={({ isActive }) => navLinkStyle(isActive)}>
-              {item.label}
+            <NavLink key={item.to} to={item.to} aria-label={item.label} style={({ isActive }) => navLinkStyle(isActive)}>
+              <item.Icon />
             </NavLink>
           ))}
         </div>
