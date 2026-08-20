@@ -81,7 +81,9 @@ export function NutritionPage() {
   const [allPlans, setAllPlans] = useState<MealPlan[]>([]);
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
   const [selectedHistoryDate, setSelectedHistoryDate] = useState<string | null>(null);
-  const [tagFilter, setTagFilter] = useState<string[]>([]);
+  const [myTagFilter, setMyTagFilter] = useState<string[]>([]);
+  const [allTagFilter, setAllTagFilter] = useState<string[]>([]);
+  const [tagFilterSeeded, setTagFilterSeeded] = useState(false);
   const [followingItems, setFollowingItems] = useState<MealPlanItem[]>([]);
   const [logFromPlanOpen, setLogFromPlanOpen] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -120,12 +122,24 @@ export function NutritionPage() {
     load();
   }, [load]);
 
-  const matchesTagFilter = (p: MealPlan) => tagFilter.length === 0 || p.dietary_tags.some((t) => tagFilter.includes(t));
-  const toggleTagFilter = (value: string) => {
-    setTagFilter((f) => (f.includes(value) ? f.filter((v) => v !== value) : [...f, value]));
+  // "My Plans" defaults to filtering by the fighter's own restrictions (once,
+  // the first time they're known) — so setting a restriction actually does
+  // something for you by default, not just for AI generation. Still freely
+  // adjustable afterward. "All Plans" is a team-oversight view and stays
+  // manual-only — a coach's own diet preference shouldn't hide other plans.
+  useEffect(() => {
+    if (!tagFilterSeeded && fighter && fighter.dietary_restrictions.length > 0) {
+      setMyTagFilter(fighter.dietary_restrictions);
+      setTagFilterSeeded(true);
+    }
+  }, [fighter, tagFilterSeeded]);
+
+  const matches = (tags: string[], plan: MealPlan) => tags.length === 0 || plan.dietary_tags.some((t) => tags.includes(t));
+  const toggleFilter = (setter: typeof setMyTagFilter, value: string) => {
+    setter((f) => (f.includes(value) ? f.filter((v) => v !== value) : [...f, value]));
   };
-  const filteredMyPlans = myPlans.filter(matchesTagFilter);
-  const filteredAllPlans = allPlans.filter(matchesTagFilter);
+  const filteredMyPlans = myPlans.filter((p) => matches(myTagFilter, p));
+  const filteredAllPlans = allPlans.filter((p) => matches(allTagFilter, p));
   const myPlansPagination = usePagination(filteredMyPlans);
   const allPlansPagination = usePagination(filteredAllPlans);
 
@@ -333,7 +347,7 @@ export function NutritionPage() {
         </div>
       ) : tab === 'plan' ? (
         <>
-          <PlanTagFilter tagFilter={tagFilter} onToggle={toggleTagFilter} />
+          <PlanTagFilter tagFilter={myTagFilter} onToggle={(v) => toggleFilter(setMyTagFilter, v)} />
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(220px,1fr))', gap: 16 }}>
             {myPlansPagination.pageItems.map((p) => (
               <div key={p.id} onClick={() => setSelectedPlanId(p.id)} className="card" style={{ padding: 20, cursor: 'pointer', position: 'relative' }}>
@@ -368,7 +382,7 @@ export function NutritionPage() {
         </>
       ) : tab === 'all' ? (
         <>
-          <PlanTagFilter tagFilter={tagFilter} onToggle={toggleTagFilter} />
+          <PlanTagFilter tagFilter={allTagFilter} onToggle={(v) => toggleFilter(setAllTagFilter, v)} />
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(220px,1fr))', gap: 16 }}>
             {allPlansPagination.pageItems.map((p) => {
               const canDelete = p.owner_id === profile.id || isCoach;
