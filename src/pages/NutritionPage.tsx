@@ -9,6 +9,7 @@ import { MEAL_GROUPS, MEAL_GROUP_META } from '../lib/trainingTypes';
 import { MealPlanEditorModal } from '../components/MealPlanEditorModal';
 import { LogFromPlanModal } from '../components/LogFromPlanModal';
 import { NutritionHistoryPanel } from '../components/NutritionHistoryPanel';
+import { useModalScrollLock } from '../hooks/useModalScrollLock';
 import { DIETARY_RESTRICTIONS, dietaryRestrictionLabel } from '../lib/dietaryRestrictions';
 import { todayISO, dayOfWeekIndex } from '../lib/date';
 import type { Fighter, MealEntry, MealGroup, MealPlan, MealPlanItem } from '../types/database';
@@ -88,6 +89,7 @@ export function NutritionPage() {
   const [followerPlans, setFollowerPlans] = useState<MealPlan[]>([]);
   const [fightersById, setFightersById] = useState<Record<string, Fighter>>({});
   const [selectedFollowerId, setSelectedFollowerId] = useState<string | null>(null);
+  const [followBusyId, setFollowBusyId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   const today = todayISO();
@@ -151,6 +153,8 @@ export function NutritionPage() {
 
   const followersPagination = usePagination(followerPlans);
 
+  useModalScrollLock(selectedFollowerId != null);
+
   if (!fighter || !profile) return <Navigate to="/dashboard" replace />;
   if (loading) return <div style={{ color: 'var(--muted-2)' }}>Loading…</div>;
 
@@ -175,6 +179,40 @@ export function NutritionPage() {
   };
 
   const toggleFollowing = async (plan: MealPlan) => {
+    if (plan.owner_id !== profile.id) {
+      // Following someone else's plan: RLS only lets you update rows you
+      // own, and "following" is a per-owner flag — so following another
+      // person's plan means making your own independent copy (same
+      // mechanism as "send to fighters") and marking that copy followed.
+      setFollowBusyId(plan.id);
+      const { data: items } = await supabase.from('meal_plan_items').select('*').eq('meal_plan_id', plan.id);
+      const sourceItems = (items ?? []) as MealPlanItem[];
+      await supabase.from('meal_plans').update({ is_following: false }).eq('owner_id', profile.id).eq('is_following', true);
+      const { data: newPlan } = await supabase
+        .from('meal_plans')
+        .insert({ name: plan.name, owner_id: profile.id, created_by: profile.id, dietary_tags: plan.dietary_tags, is_following: true })
+        .select()
+        .single();
+      if (newPlan && sourceItems.length > 0) {
+        await supabase.from('meal_plan_items').insert(
+          sourceItems.map((it) => ({
+            meal_plan_id: newPlan.id,
+            day_of_week: it.day_of_week,
+            meal_group: it.meal_group,
+            description: it.description,
+            name: it.name,
+            calories: it.calories,
+            protein_g: it.protein_g,
+            carbs_g: it.carbs_g,
+            fat_g: it.fat_g,
+          })),
+        );
+      }
+      setFollowBusyId(null);
+      await load();
+      return;
+    }
+
     if (plan.is_following) {
       await supabase.from('meal_plans').update({ is_following: false }).eq('id', plan.id);
     } else {
@@ -403,15 +441,20 @@ export function NutritionPage() {
                   <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 6, paddingRight: canDelete ? 20 : 0 }}>{p.name}</div>
                   <div style={{ fontSize: 12, color: 'var(--muted-3)', marginBottom: 6 }}>{directory[p.owner_id]?.name ?? '—'} · Updated {p.updated_at.slice(0, 10)}</div>
                   <PlanTagBadges tags={p.dietary_tags} />
-                  {p.owner_id === profile.id && (
-                    <button
-                      onClick={(e) => { e.stopPropagation(); toggleFollowing(p); }}
-                      className="btn-secondary"
-                      style={{ marginTop: 10, padding: '4px 10px', fontSize: 11, background: p.is_following ? 'var(--accent)' : 'transparent', color: p.is_following ? 'oklch(0.98 0 0)' : undefined }}
-                    >
-                      {p.is_following ? 'FOLLOWING' : 'Follow'}
-                    </button>
-                  )}
+                  {(() => {
+                    const isMine = p.owner_id === profile.id;
+                    const following = isMine && p.is_following;
+                    return (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); toggleFollowing(p); }}
+                        className="btn-secondary"
+                        disabled={followBusyId === p.id}
+                        style={{ marginTop: 10, padding: '4px 10px', fontSize: 11, background: following ? 'var(--accent)' : 'transparent', color: following ? 'oklch(0.98 0 0)' : undefined }}
+                      >
+                        {followBusyId === p.id ? '…' : following ? 'FOLLOWING' : isMine ? 'Follow' : 'Follow (copy for me)'}
+                      </button>
+                    );
+                  })()}
                 </div>
               );
             })}
