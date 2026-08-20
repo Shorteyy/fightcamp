@@ -60,7 +60,7 @@ export function WeightEntryRow({ entry, fighterName, canManage, onSaved }: Props
   }
 
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 0', borderBottom: '1px solid var(--border)', fontSize: 13 }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 0', borderBottom: '1px solid var(--border)', fontSize: 13, flexWrap: 'wrap' }}>
       {fighterName && <div style={{ flex: '1 1 100px' }}>{fighterName}</div>}
       <div style={{ flex: '1 1 130px', color: 'var(--muted-2)' }}>
         {entry.entry_date}
@@ -68,7 +68,7 @@ export function WeightEntryRow({ entry, fighterName, canManage, onSaved }: Props
       </div>
       <div style={{ flex: '1 1 70px', fontWeight: 600 }}>{entry.weight_kg} kg</div>
       {canManage && (
-        <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+        <div style={{ display: 'flex', gap: 6, marginLeft: 'auto' }}>
           <button onClick={startEdit} className="btn-secondary" style={{ padding: '4px 8px', fontSize: 11 }}>Edit</button>
           <button onClick={remove} className="btn-secondary" style={{ padding: '4px 8px', fontSize: 11 }}>Delete</button>
         </div>

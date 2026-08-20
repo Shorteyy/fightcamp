@@ -3,6 +3,7 @@ import { Navigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../auth/AuthContext';
 import { useGalaDirectory } from '../hooks/useGalaDirectory';
+import { useIsMobile } from '../hooks/useIsMobile';
 import { usePagination } from '../hooks/usePagination';
 import { PaginationControls } from '../components/PaginationControls';
 import { buildWeightChart, computeStatus } from '../lib/chart';
@@ -15,6 +16,7 @@ import type { Goal, WeightEntry, WeightPeriod } from '../types/database';
 export function WeightPage() {
   const { fighter, profile } = useAuth();
   const { galasById, loading: galasLoading } = useGalaDirectory();
+  const isMobile = useIsMobile();
   const [history, setHistory] = useState<WeightEntry[]>([]);
   const [activeGoal, setActiveGoal] = useState<Goal | null>(null);
   const [goalHistory, setGoalHistory] = useState<Goal[]>([]);
@@ -161,8 +163,13 @@ export function WeightPage() {
   const status = activeGoal && deadline && history.length > 0
     ? computeStatus(history.map((h) => ({ date: h.entry_date, weight: h.weight_kg })), activeGoal.target_weight_kg, deadline, today)
     : null;
+  // Chart coordinate space matches the actual on-screen size on mobile —
+  // scaling a 760-wide chart down to a ~340px screen shrinks the (fixed,
+  // viewBox-unit) font sizes below readable, hence the separate dims.
+  const chartW = isMobile ? 320 : 760;
+  const chartH = isMobile ? 230 : 300;
   const chart = activeGoal && deadline && history.length > 0
-    ? buildWeightChart(history.map((h) => ({ date: h.entry_date, weight: h.weight_kg })), activeGoal.target_weight_kg, deadline, 760, 300)
+    ? buildWeightChart(history.map((h) => ({ date: h.entry_date, weight: h.weight_kg })), activeGoal.target_weight_kg, deadline, chartW, chartH)
     : null;
   return (
     <div>
@@ -198,18 +205,18 @@ export function WeightPage() {
 
       <div className="card" style={{ marginBottom: 24 }}>
         {chart ? (
-          <svg width="100%" height="300" viewBox="0 0 760 300">
+          <svg width="100%" height={chartH} viewBox={`-15 0 ${chartW + 15} ${chartH}`}>
             {chart.yTicks.map((t, i) => (
               <g key={i}>
-                <line x1={38} y1={t.pos} x2={750} y2={t.pos} stroke="oklch(0.28 0.012 40)" strokeWidth="1" />
+                <line x1={38} y1={t.pos} x2={chartW - 10} y2={t.pos} stroke="oklch(0.28 0.012 40)" strokeWidth="1" />
                 <text x={34} y={t.pos + 4} fontSize="11" fill="oklch(0.55 0.01 40)" textAnchor="end">{t.label}</text>
               </g>
             ))}
             {chart.xTicks.map((t, i) => (
-              <text key={i} x={t.pos} y={296} fontSize="11" fill="oklch(0.55 0.01 40)" textAnchor="middle">{t.label}</text>
+              <text key={i} x={t.pos} y={chartH - 4} fontSize="11" fill="oklch(0.55 0.01 40)" textAnchor="middle">{t.label}</text>
             ))}
-            <line x1={chart.markerX} y1="0" x2={chart.markerX} y2="270" stroke="oklch(0.5 0.01 40)" strokeWidth="1" strokeDasharray="3 3" />
-            <text x={chart.markerX} y="288" fontSize="11" fill="oklch(0.6 0.01 40)" textAnchor="middle">Goal: {deadline}</text>
+            <line x1={chart.markerX} y1="0" x2={chart.markerX} y2={chartH - 30} stroke="oklch(0.5 0.01 40)" strokeWidth="1" strokeDasharray="3 3" />
+            <text x={chart.markerX} y={chartH - 12} fontSize="11" fill="oklch(0.6 0.01 40)" textAnchor="middle">Goal: {deadline}</text>
             <path d={chart.goalPath} stroke="oklch(0.5 0.01 40)" strokeWidth="1.5" strokeDasharray="5 5" fill="none" />
             <path d={chart.linePath} stroke="oklch(0.58 0.2 25)" strokeWidth="3" fill="none" />
             {chart.dots.map((d, i) => (
@@ -224,7 +231,7 @@ export function WeightPage() {
         )}
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.3fr', gap: 20, marginBottom: 24 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1.3fr', gap: 20, marginBottom: 24 }}>
         <div className="card" style={{ padding: 22 }}>
           <div className="label" style={{ fontSize: 16, marginBottom: 16 }}>LOG WEIGHT</div>
           <div style={{ display: 'flex', gap: 10, marginBottom: 12 }}>
@@ -272,7 +279,7 @@ function GoalHistoryList({ goals, galasById, onDelete }: { goals: Goal[]; galasB
         const gDeadline = effectiveDeadline(g, galasById);
         const gGala = linkedGala(g, galasById);
         return (
-          <div key={g.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid var(--border)', fontSize: 13 }}>
+          <div key={g.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid var(--border)', fontSize: 13, flexWrap: 'wrap', gap: 8 }}>
             <div>
               <strong>{g.target_weight_kg} kg</strong>
               <span style={{ color: 'var(--muted-2)' }}> by {gDeadline ?? '—'}{gGala ? ` (${gGala.name})` : ''}</span>
