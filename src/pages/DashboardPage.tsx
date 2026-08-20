@@ -9,10 +9,11 @@ import { GalaDetailModal } from '../components/GalaDetailModal';
 import { TRAINING_TYPE_META } from '../lib/trainingTypes';
 import { PARTICIPATION_META, GALA_COLOR } from '../lib/galas';
 import { effectiveDeadline } from '../lib/goals';
-import { todayISO, weekStart, weekDates, dayFull } from '../lib/date';
+import { todayISO, weekStart, weekDates, dayFull, dayOfWeekIndex } from '../lib/date';
 import { buildWeightChart, computeStatus } from '../lib/chart';
 import { sortWeightEntries } from '../lib/weight';
-import type { Gala, GalaParticipationType, Goal, Training, WeightEntry } from '../types/database';
+import { MEAL_GROUPS, MEAL_GROUP_META } from '../lib/trainingTypes';
+import type { Gala, GalaParticipationType, Goal, MealPlan, MealPlanItem, Training, WeightEntry } from '../types/database';
 
 export function DashboardPage() {
   const { profile, fighter } = useAuth();
@@ -27,6 +28,8 @@ export function DashboardPage() {
   const [weightHistory, setWeightHistory] = useState<WeightEntry[]>([]);
   const [activeGoal, setActiveGoal] = useState<Goal | null>(null);
   const [caloriesToday, setCaloriesToday] = useState(0);
+  const [followingPlan, setFollowingPlan] = useState<MealPlan | null>(null);
+  const [followingPlanItems, setFollowingPlanItems] = useState<MealPlanItem[]>([]);
   const [myGalaParticipation, setMyGalaParticipation] = useState<Record<string, GalaParticipationType>>({});
   const [selectedTrainingId, setSelectedTrainingId] = useState<string | null>(null);
   const [selectedGalaId, setSelectedGalaId] = useState<string | null>(null);
@@ -90,6 +93,16 @@ export function DashboardPage() {
         .eq('fighter_id', fighter.profile_id)
         .eq('entry_date', today);
       setCaloriesToday((meals ?? []).reduce((a, m) => a + m.calories, 0));
+
+      const { data: fp } = await supabase.from('meal_plans').select('*').eq('owner_id', fighter.profile_id).eq('is_following', true).maybeSingle();
+      const plan = (fp as MealPlan) ?? null;
+      setFollowingPlan(plan);
+      if (plan) {
+        const { data: items } = await supabase.from('meal_plan_items').select('*').eq('meal_plan_id', plan.id).eq('day_of_week', dayOfWeekIndex(today));
+        setFollowingPlanItems((items ?? []) as MealPlanItem[]);
+      } else {
+        setFollowingPlanItems([]);
+      }
     }
 
     if (profile) {
@@ -186,6 +199,45 @@ export function DashboardPage() {
                 <div style={{ color: 'var(--muted-2)', fontSize: 13 }}>{dayFull(g.event_date)} · {g.location || 'Location TBD'}</div>
               </div>
             ))}
+          </div>
+        </>
+      )}
+
+      {fighter && (
+        <>
+          <div className="label" style={{ fontSize: 18, marginBottom: 14 }}>TODAY'S MEALPLAN</div>
+          <div className="card" style={{ padding: '18px 22px', marginBottom: 36 }}>
+            {!followingPlan ? (
+              <div style={{ fontSize: 13, color: 'var(--muted-3)' }}>
+                You're not following a meal plan yet.{' '}
+                <button onClick={() => navigate('/nutrition')} style={{ background: 'none', border: 'none', color: 'var(--accent)', padding: 0, fontSize: 13, textDecoration: 'underline' }}>
+                  Pick one
+                </button>
+              </div>
+            ) : followingPlanItems.length === 0 ? (
+              <div style={{ fontSize: 13, color: 'var(--muted-3)' }}>Nothing planned for today in "{followingPlan.name}".</div>
+            ) : (
+              <>
+                <div style={{ fontSize: 12, color: 'var(--muted-3)', marginBottom: 12 }}>Following <strong style={{ color: 'var(--text)' }}>{followingPlan.name}</strong></div>
+                {MEAL_GROUPS.map((group) => {
+                  const item = followingPlanItems.find((it) => it.meal_group === group);
+                  const name = item?.name?.trim() || item?.description?.trim();
+                  if (!name) return null;
+                  return (
+                    <div key={group} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid var(--border)', fontSize: 13 }}>
+                      <div>
+                        <span style={{ color: 'var(--muted-3)', fontSize: 11, marginRight: 8 }}>{MEAL_GROUP_META[group].label}</span>
+                        {name}
+                      </div>
+                      {item?.calories != null && <span style={{ color: 'var(--muted-2)' }}>{item.calories} kcal</span>}
+                    </div>
+                  );
+                })}
+                <button className="btn-secondary" style={{ marginTop: 14, padding: '8px 16px', fontSize: 12 }} onClick={() => navigate('/nutrition')}>
+                  Log these in Nutrition →
+                </button>
+              </>
+            )}
           </div>
         </>
       )}
