@@ -1,6 +1,8 @@
 import { useState } from 'react';
+import { useModalScrollLock } from '../hooks/useModalScrollLock';
 
 export function ShareFighterModal({ onClose }: { onClose: () => void }) {
+  useModalScrollLock();
   const [copied, setCopied] = useState(false);
   const link = window.location.origin + '/signup';
 

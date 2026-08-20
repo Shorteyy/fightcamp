@@ -6,6 +6,7 @@ import { dayFull } from '../lib/date';
 import { usePagination } from '../hooks/usePagination';
 import { PaginationControls } from './PaginationControls';
 import { CreateGalaModal } from './CreateGalaModal';
+import { useModalScrollLock } from '../hooks/useModalScrollLock';
 import type { DirectoryEntry } from '../hooks/useProfileDirectory';
 import type { Gala, GalaParticipant, GalaParticipationType, Goal } from '../types/database';
 
@@ -17,6 +18,7 @@ interface Props {
 }
 
 export function GalaDetailModal({ gala, directory, onClose, onGalaChanged }: Props) {
+  useModalScrollLock();
   const { profile, fighter } = useAuth();
   const [participants, setParticipants] = useState<GalaParticipant[]>([]);
   const [activeGoal, setActiveGoal] = useState<Goal | null>(null);

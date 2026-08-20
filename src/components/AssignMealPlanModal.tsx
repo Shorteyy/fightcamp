@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../auth/AuthContext';
+import { useModalScrollLock } from '../hooks/useModalScrollLock';
 import type { DirectoryEntry } from '../hooks/useProfileDirectory';
 import type { MealPlan, MealPlanItem } from '../types/database';
 
@@ -12,6 +13,7 @@ interface Props {
 }
 
 export function AssignMealPlanModal({ plan, directory, onClose, onAssigned }: Props) {
+  useModalScrollLock();
   const { profile } = useAuth();
   const [memberIds, setMemberIds] = useState<string[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());

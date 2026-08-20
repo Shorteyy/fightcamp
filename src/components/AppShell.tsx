@@ -80,7 +80,7 @@ export function AppShell() {
         </div>
       )}
 
-      <div style={{ flex: 1, height: '100%', overflowY: 'auto', padding: isMobile ? '24px 20px 100px 20px' : '36px 40px 100px 40px', position: 'relative' }}>
+      <div className="app-content" style={{ flex: 1, height: '100%', overflowY: 'auto', padding: isMobile ? '24px 20px 100px 20px' : '36px 40px 100px 40px', position: 'relative' }}>
         <Outlet />
       </div>
     </div>

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
+import { useModalScrollLock } from '../hooks/useModalScrollLock';
 import { MEAL_GROUPS, MEAL_GROUP_META, DAY_LABELS } from '../lib/trainingTypes';
 import { dayOfWeekIndex, todayISO } from '../lib/date';
 import type { MealGroup, MealPlan, MealPlanItem } from '../types/database';
@@ -21,6 +22,7 @@ interface Props {
 }
 
 export function LogFromPlanModal({ ownerId, plans, onClose, onLogged }: Props) {
+  useModalScrollLock();
   const followingPlan = plans.find((p) => p.is_following);
   const [planId, setPlanId] = useState<string | null>(followingPlan?.id ?? plans[0]?.id ?? null);
   const [dayIndex, setDayIndex] = useState(dayOfWeekIndex(todayISO()));

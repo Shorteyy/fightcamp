@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase';
 import { TRAINING_TYPE_META, TRAINING_TYPES } from '../lib/trainingTypes';
 import { todayISO } from '../lib/date';
 import { useAuth } from '../auth/AuthContext';
+import { useModalScrollLock } from '../hooks/useModalScrollLock';
 import type { TrainingType } from '../types/database';
 
 interface Props {
@@ -12,6 +13,7 @@ interface Props {
 }
 
 export function PlanTrainingModal({ defaultDate, onClose, onCreated }: Props) {
+  useModalScrollLock();
   const { profile, fighter } = useAuth();
   const [type, setType] = useState<TrainingType>('kickboxing');
   const [title, setTitle] = useState('');

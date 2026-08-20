@@ -4,6 +4,7 @@ import { TRAINING_TYPE_META } from '../lib/trainingTypes';
 import { dayFull } from '../lib/date';
 import { usePagination } from '../hooks/usePagination';
 import { PaginationControls } from './PaginationControls';
+import { useModalScrollLock } from '../hooks/useModalScrollLock';
 import type { Training } from '../types/database';
 import type { DirectoryEntry } from '../hooks/useProfileDirectory';
 
@@ -18,6 +19,7 @@ interface Props {
 }
 
 export function TrainingDetailModal({ training, attendeeIds, directory, currentFighterId, isCoach, onClose, onChanged }: Props) {
+  useModalScrollLock();
   const [busy, setBusy] = useState(false);
   const meta = TRAINING_TYPE_META[training.type];
   const cancelled = training.cancelled_at != null;

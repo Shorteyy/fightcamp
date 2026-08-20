@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { usePagination } from '../hooks/usePagination';
 import { PaginationControls } from '../components/PaginationControls';
+import { useModalScrollLock } from '../hooks/useModalScrollLock';
 import { MEAL_GROUPS, MEAL_GROUP_META } from '../lib/trainingTypes';
 import type { MealEntry } from '../types/database';
 
@@ -44,6 +45,8 @@ export function NutritionHistoryPanel({ fighterId, dailyCalorieTarget }: Props) 
   });
   const pagination = usePagination(dailyTotals);
   const selectedEntries = selectedDate ? entries.filter((e) => e.entry_date === selectedDate) : [];
+
+  useModalScrollLock(selectedDate != null);
 
   if (loading) return <div style={{ color: 'var(--muted-2)', fontSize: 13 }}>Loading…</div>;
 

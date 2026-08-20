@@ -7,6 +7,7 @@ import { buildWeightChart } from '../lib/chart';
 import { sortWeightEntries } from '../lib/weight';
 import { effectiveDeadline, linkedGala } from '../lib/goals';
 import { useGalaDirectory } from '../hooks/useGalaDirectory';
+import { useModalScrollLock } from '../hooks/useModalScrollLock';
 import type { DirectoryEntry } from '../hooks/useProfileDirectory';
 import type { Fighter, Goal, Training, TrainingType, WeightEntry } from '../types/database';
 
@@ -19,6 +20,7 @@ interface Props {
 }
 
 export function FighterProfileModal({ fighter, profile, isCoach, onClose, onChanged }: Props) {
+  useModalScrollLock();
   const { profile: myProfile } = useAuth();
   const { galasById } = useGalaDirectory();
   const [history, setHistory] = useState<WeightEntry[]>([]);

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../auth/AuthContext';
+import { useModalScrollLock } from '../hooks/useModalScrollLock';
 import { todayISO } from '../lib/date';
 import type { Gala } from '../types/database';
 
@@ -11,6 +12,7 @@ interface Props {
 }
 
 export function CreateGalaModal({ editing, onClose, onSaved }: Props) {
+  useModalScrollLock();
   const { profile } = useAuth();
   const [name, setName] = useState(editing?.name ?? '');
   const [date, setDate] = useState(editing?.event_date ?? todayISO());

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { supabase } from '../lib/supabase';
+import { useModalScrollLock } from '../hooks/useModalScrollLock';
 import { downloadShoppingListPdf } from '../lib/shoppingListPdf';
 import type { MealPlan, ShoppingListCategory } from '../types/database';
 
@@ -10,6 +11,7 @@ interface Props {
 }
 
 export function ShoppingListPanel({ plan, onClose, onSaved }: Props) {
+  useModalScrollLock();
   const [list, setList] = useState<ShoppingListCategory[] | null>(plan.shopping_list);
   const [generatedAt, setGeneratedAt] = useState<string | null>(plan.shopping_list_generated_at);
   const [generating, setGenerating] = useState(false);
