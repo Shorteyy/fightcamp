@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../auth/AuthContext';
+import { useModalScrollLock } from '../hooks/useModalScrollLock';
 import { MEAL_GROUPS, MEAL_GROUP_META, DAY_LABELS } from '../lib/trainingTypes';
 import { AssignMealPlanModal } from './AssignMealPlanModal';
 import { GenerateMealPlanPanel, type GeneratedPlan } from './GenerateMealPlanPanel';
@@ -29,6 +30,7 @@ interface Props {
 }
 
 export function MealPlanEditorModal({ plan, directory, canAssign, onClose, onSaved }: Props) {
+  useModalScrollLock();
   const { profile } = useAuth();
   const isOwner = profile?.id === plan.owner_id;
   const canEdit = isOwner || profile?.role === 'coach';
@@ -45,6 +47,7 @@ export function MealPlanEditorModal({ plan, directory, canAssign, onClose, onSav
   const [estimating, setEstimating] = useState(false);
   const [estimateError, setEstimateError] = useState<string | null>(null);
   const [expandedCell, setExpandedCell] = useState<{ day: number; group: string } | null>(null);
+  const [generationNote, setGenerationNote] = useState<string | null>(null);
 
   useEffect(() => {
     supabase.from('meal_plan_items').select('*').eq('meal_plan_id', plan.id).then(({ data }) => {
@@ -127,6 +130,7 @@ export function MealPlanEditorModal({ plan, directory, canAssign, onClose, onSav
     setCells(next);
     setName(generated.planName);
     setTags(generated.dietaryRestrictionsUsed ?? []);
+    setGenerationNote(generated.planRationale || null);
     setGenerateOpen(false);
   };
 
@@ -199,6 +203,20 @@ export function MealPlanEditorModal({ plan, directory, canAssign, onClose, onSav
 
         {canEdit && generateOpen && (
           <GenerateMealPlanPanel ownerId={plan.owner_id} onGenerated={applyGenerated} onCancel={() => setGenerateOpen(false)} />
+        )}
+
+        {generationNote && (
+          <div className="card" style={{ padding: 14, marginBottom: 16, borderLeft: '4px solid var(--accent)', position: 'relative' }}>
+            <button
+              onClick={() => setGenerationNote(null)}
+              style={{ position: 'absolute', top: 8, right: 10, background: 'transparent', border: 'none', color: 'var(--muted-3)', fontSize: 14 }}
+              title="Dismiss"
+            >
+              ✕
+            </button>
+            <div style={{ fontSize: 11, color: 'var(--accent)', letterSpacing: '0.5px', marginBottom: 6 }}>WHY THIS PLAN</div>
+            <div style={{ fontSize: 13, color: 'var(--muted-1)', paddingRight: 20 }}>{generationNote}</div>
+          </div>
         )}
 
         {loading ? (

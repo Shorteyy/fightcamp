@@ -12,6 +12,22 @@ const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
 const MEAL_GROUPS = ['breakfast', 'lunch', 'dinner', 'snack'];
 const DAY_NAMES = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
+// Mirrors src/lib/dietaryRestrictions.ts — kept as a small local copy
+// because Edge Functions can't import frontend modules (same pattern
+// already used for MEAL_GROUPS above). Used only to turn stored slugs
+// into readable text for the prompt; unrecognized values pass through
+// as-is so nothing is silently dropped if the two lists drift.
+const RESTRICTION_LABELS: Record<string, string> = {
+  halal: 'Halal',
+  kosher: 'Kosher',
+  vegan: 'Vegan',
+  vegetarian: 'Vegetarian',
+  lactose_intolerant: 'Lactose intolerant',
+  gluten_free: 'Gluten-free',
+  nut_allergy: 'Nut allergy',
+  shellfish_allergy: 'Shellfish allergy',
+};
+
 interface DayItem {
   dayOfWeek: number;
   mealGroup: string;
@@ -43,11 +59,21 @@ Deno.serve(async (req) => {
 
     const body = await req.json().catch(() => null);
     const direction = body?.direction;
+    // All restrictions, unfiltered by count — only non-string entries are
+    // dropped (defensive against a malformed request body).
     const dietaryRestrictions: string[] = Array.isArray(body?.dietaryRestrictions) ? body.dietaryRestrictions.filter((r: unknown) => typeof r === 'string') : [];
 
     if (direction !== 'goal' && direction !== 'calories') {
       return jsonResponse({ error: 'direction must be "goal" or "calories"' }, 400);
     }
+
+    // Current weight and active-goal context are supplementary background —
+    // sent whenever known, regardless of which direction is driving the
+    // plan — so the model can pace a "calories" plan sensibly too, not
+    // just when direction === 'goal'.
+    const currentWeightKg = typeof body?.currentWeightKg === 'number' ? body.currentWeightKg : null;
+    const goalWeightKg = typeof body?.goalWeightKg === 'number' ? body.goalWeightKg : null;
+    const deadlineISO = typeof body?.deadlineISO === 'string' ? body.deadlineISO : null;
 
     let goalContext = '';
     if (direction === 'calories') {
@@ -55,8 +81,7 @@ Deno.serve(async (req) => {
       if (targetCalories === null) return jsonResponse({ error: 'targetCalories must be a number between 800 and 8000' }, 400);
       goalContext = `Build the plan around a daily calorie target of approximately ${targetCalories} kcal.`;
     } else {
-      const { goalWeightKg, currentWeightKg, deadlineISO } = body ?? {};
-      if (typeof goalWeightKg !== 'number' || typeof currentWeightKg !== 'number' || typeof deadlineISO !== 'string') {
+      if (currentWeightKg === null || goalWeightKg === null || deadlineISO === null) {
         return jsonResponse({ error: 'goal direction requires goalWeightKg, currentWeightKg, and deadlineISO' }, 400);
       }
       goalContext =
@@ -65,21 +90,35 @@ Deno.serve(async (req) => {
         'Report the daily calorie target you chose as dailyCalorieTarget.';
     }
 
-    const restrictionsText = dietaryRestrictions.length > 0
-      ? `Strictly respect these dietary restrictions: ${dietaryRestrictions.join(', ')}. No meal may violate any of them.`
+    // Background context beyond whatever direction-specific instruction was
+    // just built — e.g. so a "calories" plan still gets paced sensibly
+    // against a real goal/deadline instead of ignoring it.
+    const backgroundParts: string[] = [];
+    if (currentWeightKg !== null && direction !== 'goal') backgroundParts.push(`Current weight: ${currentWeightKg} kg.`);
+    if (goalWeightKg !== null && deadlineISO !== null && direction !== 'goal') {
+      const daysRemaining = Math.round((new Date(deadlineISO + 'T00:00:00Z').getTime() - Date.now()) / 86400000);
+      backgroundParts.push(`They also have an active goal of ${goalWeightKg} kg by ${deadlineISO} (${daysRemaining} days from now) — keep the plan's pacing realistic against that timeline even though it isn't the primary driver here.`);
+    }
+    const backgroundText = backgroundParts.length > 0 ? ` ${backgroundParts.join(' ')}` : '';
+
+    const restrictionLabels = dietaryRestrictions.map((r) => RESTRICTION_LABELS[r] ?? r);
+    const restrictionsText = restrictionLabels.length > 0
+      ? `Strictly respect ALL of these dietary restrictions: ${restrictionLabels.join(', ')}. No meal may violate any of them.`
       : 'No dietary restrictions.';
 
     const prompt =
-      `Create a 7-day meal plan for a combat sports athlete (kickboxing) in training. ${goalContext} ${restrictionsText}\n\n` +
+      `Create a 7-day meal plan for a combat sports athlete (kickboxing) in training. ${goalContext}${backgroundText} ${restrictionsText}\n\n` +
       `Provide exactly one entry for each of the 7 days (Monday=0 through Sunday=6) and each of the 4 meal groups (breakfast, lunch, dinner, snack) — 28 entries total. ` +
       'Each entry needs a short recipe-style name, a one-sentence description, and estimated calories + macros (protein_g, carbs_g, fat_g). ' +
-      'Also provide a short plan name (e.g. "Fight Camp Cut Week") and the dailyCalorieTarget used.';
+      'Also provide a short plan name (e.g. "Fight Camp Cut Week"), the dailyCalorieTarget used, and a planRationale: 2-3 sentences in plain language explaining how the plan fits the goal — ' +
+      'e.g. the size of the calorie deficit/surplus versus an estimated maintenance level, and whether the pace is realistic for the deadline. If there is no weight goal, briefly explain why this calorie target suits a fighter in training.';
 
     const schema = {
       type: 'OBJECT',
       properties: {
         planName: { type: 'STRING' },
         dailyCalorieTarget: { type: 'INTEGER' },
+        planRationale: { type: 'STRING' },
         days: {
           type: 'ARRAY',
           items: {
@@ -98,7 +137,7 @@ Deno.serve(async (req) => {
           },
         },
       },
-      required: ['planName', 'dailyCalorieTarget', 'days'],
+      required: ['planName', 'dailyCalorieTarget', 'planRationale', 'days'],
     };
 
     let raw: unknown;
@@ -109,9 +148,10 @@ Deno.serve(async (req) => {
       throw e;
     }
 
-    const parsed = raw as { planName?: unknown; dailyCalorieTarget?: unknown; days?: unknown };
+    const parsed = raw as { planName?: unknown; dailyCalorieTarget?: unknown; planRationale?: unknown; days?: unknown };
     const planName = typeof parsed.planName === 'string' && parsed.planName.trim() ? parsed.planName.trim().slice(0, 80) : `AI Plan (${DAY_NAMES[0]}–${DAY_NAMES[6]})`;
     const dailyCalorieTarget = clampNumber(parsed.dailyCalorieTarget, 800, 8000) ?? 2400;
+    const planRationale = typeof parsed.planRationale === 'string' ? parsed.planRationale.trim().slice(0, 600) : '';
 
     if (!Array.isArray(parsed.days)) return jsonResponse({ error: 'AI returned an unexpected shape' }, 502);
 
@@ -142,7 +182,7 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: 'AI returned an incomplete plan — please retry' }, 502);
     }
 
-    return jsonResponse({ planName, dailyCalorieTarget: Math.round(dailyCalorieTarget), days });
+    return jsonResponse({ planName, dailyCalorieTarget: Math.round(dailyCalorieTarget), planRationale, days });
   } catch (e) {
     return jsonResponse({ error: e instanceof Error ? e.message : 'Unexpected error' }, 500);
   }

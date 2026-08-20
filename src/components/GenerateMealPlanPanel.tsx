@@ -7,6 +7,7 @@ import type { Fighter, Goal, WeightEntry } from '../types/database';
 export interface GeneratedPlan {
   planName: string;
   dailyCalorieTarget: number;
+  planRationale: string;
   dietaryRestrictionsUsed: string[];
   days: {
     dayOfWeek: number;
@@ -65,6 +66,16 @@ export function GenerateMealPlanPanel({ ownerId, onGenerated, onCancel }: Props)
       direction,
       dietaryRestrictions: fighter?.dietary_restrictions ?? [],
     };
+
+    // Background weight/goal context is sent whenever known, regardless of
+    // which direction is actually driving the plan, so a calorie-target
+    // plan still gets paced sensibly against a real goal if one exists.
+    if (latestWeight != null) body.currentWeightKg = latestWeight;
+    if (goalWeightKg && deadlineISO) {
+      body.goalWeightKg = parseFloat(goalWeightKg);
+      body.deadlineISO = deadlineISO;
+    }
+
     if (direction === 'calories') {
       const cal = parseInt(targetCalories, 10);
       if (!cal || cal < 800) {
@@ -79,9 +90,6 @@ export function GenerateMealPlanPanel({ ownerId, onGenerated, onCancel }: Props)
         setGenerating(false);
         return;
       }
-      body.currentWeightKg = latestWeight;
-      body.goalWeightKg = parseFloat(goalWeightKg);
-      body.deadlineISO = deadlineISO;
     }
 
     const { data, error: fnError } = await supabase.functions.invoke('generate-mealplan', { body });
